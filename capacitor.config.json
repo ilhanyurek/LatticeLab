@@ -1,0 +1,8 @@
+{
+  "appId": "com.miller3d.app",
+  "appName": "Miller 3B",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}
