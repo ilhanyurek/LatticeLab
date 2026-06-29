@@ -145,21 +145,32 @@ export class CrystalScene {
   _buildAtoms() {
     this._clear(this.groups.atoms);
     const s = this.structure;
-    const r = this.atomMode === 'space' ? s.touchRadius : 0.16;
-    const geo = new THREE.SphereGeometry(r, 28, 20);
     const colors = {
       corner: 0x4f8cff,
       center: 0xff7043,
       face: 0x66bb6a,
       inner: 0xab47bc,
     };
+    const space = this.atomMode === 'space';
     s.atoms.forEach((a) => {
+      let color;
+      let r;
+      if (a.sp && s.species) {
+        // bilesik: iyon turune gore renk ve yaricap
+        const sp = s.species[a.sp];
+        color = sp.color;
+        r = space ? sp.r : sp.r * 0.62;
+      } else {
+        color = colors[a.kind] || 0x4f8cff;
+        r = space ? s.touchRadius : 0.16;
+      }
+      const geo = new THREE.SphereGeometry(r, 28, 20);
       const mat = new THREE.MeshStandardMaterial({
-        color: colors[a.kind] || 0x4f8cff,
+        color,
         roughness: 0.45,
         metalness: 0.1,
-        transparent: this.atomMode === 'space',
-        opacity: this.atomMode === 'space' ? 0.92 : 1,
+        transparent: space,
+        opacity: space ? 0.92 : 1,
       });
       const m = new THREE.Mesh(geo, mat);
       m.position.set(a.pos[0], a.pos[1], a.pos[2]);
