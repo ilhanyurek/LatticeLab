@@ -31,10 +31,10 @@ En güncel sürümü **[Releases](../../releases/latest)** sayfasından indirebi
 
 **Kristal yapılar (3B, döndür–yakınlaştır):**
 - **Saf metaller:** BK (Basit Kübik), HMK (HMK/BCC), YMK (YMK/FCC), HSP (HSP/HCP)
-- **Bileşikler:** NaCl, CsCl, ZnS (sfalerit), CaF₂ (florit) — iyonlar ayrı renk/boyut
+- **Bileşikler:** NaCl, CsCl, ZnS, CaF₂ 
 
 **Miller indisleri:**
-- **Düzlemler (hkl):** negatif/sıfır indis dahil — `(100)`, `(-200)`, `(111)`…
+- **Düzlemler (hkl):**
   Negatif indiste orijin otomatik kaydırılır; düzlemler arası mesafe (d) gösterilir.
 - **Doğrultular [uvw]:** kübik 3-indis ve HSP 4-indis `[uvtw]` (otomatik dönüşüm).
 - Eksenler hücre dış hattından **farklı renkte:** kübikte x–y–z, HSP'de a1–a2–a3–c
