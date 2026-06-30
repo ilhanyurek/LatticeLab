@@ -25,6 +25,8 @@ jobs:
         with: { node-version: '20' }
       - run: npm ci
       - run: npm run build
+      - name: Capacitor senkronize et (cordova.variables.gradle vb. uret)
+        run: npx cap sync android
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
       - name: APK derle (imzali release)
