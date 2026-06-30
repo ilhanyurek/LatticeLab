@@ -1,8 +1,8 @@
 // i18n.js — TR/EN dil destegi
 const DICT = {
   tr: {
-    title: 'Miller İndisleri 3B',
-    subtitle: 'Malzeme Biliminin Temelleri — kristal düzlemleri ve doğrultuları',
+    title: 'LatticeLab',
+    subtitle: 'Malzeme Biliminin Temelleri — kristal düzlemleri, doğrultuları ve yapıları',
     cat_metal: 'Saf Metaller',
     cat_compound: 'Bileşikler',
     sec_structure: 'Kristal Yapı',
@@ -84,8 +84,8 @@ const DICT = {
     close: 'Kapat',
   },
   en: {
-    title: 'Miller Indices 3D',
-    subtitle: 'Fundamentals of Materials Science — crystal planes and directions',
+    title: 'LatticeLab',
+    subtitle: 'Fundamentals of Materials Science — crystal planes, directions and structures',
     cat_metal: 'Pure Metals',
     cat_compound: 'Compounds',
     sec_structure: 'Crystal Structure',

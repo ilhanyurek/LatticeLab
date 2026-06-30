@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Miller 3B</string>
-    <string name="title_activity_main">Miller 3B</string>
+    <string name="app_name">LatticeLab</string>
+    <string name="title_activity_main">LatticeLab</string>
     <string name="package_name">com.miller3d.app</string>
     <string name="custom_url_scheme">com.miller3d.app</string>
 </resources>

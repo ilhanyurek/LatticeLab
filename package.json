@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.miller3d.app",
-    "productName": "Miller 3B",
+    "productName": "LatticeLab",
     "directories": {
       "output": "dist-electron"
     },
@@ -32,7 +32,7 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Miller 3B"
+      "shortcutName": "LatticeLab"
     }
   },
   "devDependencies": {

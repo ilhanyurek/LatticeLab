@@ -10,7 +10,7 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#0f1419',
     icon: path.join(__dirname, '..', 'build', 'icon.ico'),
-    title: 'Miller 3B',
+    title: 'LatticeLab',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

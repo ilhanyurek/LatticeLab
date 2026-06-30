@@ -1,7 +1,7 @@
 name: Release (APK + Windows EXE)
 
 # Bu ortam tag push'unu ve (main disi workflow icin) dispatch'i engelledigi
-# icin: commit mesajinda [release] gecince calisir. Yayin etiketi RELEASE_TAG.
+# icin: commit mesajinda [release] gecince calisir. Yayin etiketi asagidaki TAG.
 on:
   push:
     branches: ['**']
@@ -34,9 +34,9 @@ jobs:
           cd android
           chmod +x ./gradlew
           ./gradlew :app:assembleRelease --no-daemon
-      - run: cp android/app/build/outputs/apk/release/app-release.apk Miller-3B.apk
+      - run: cp android/app/build/outputs/apk/release/app-release.apk LatticeLab.apk
       - uses: actions/upload-artifact@v4
-        with: { name: apk, path: Miller-3B.apk }
+        with: { name: apk, path: LatticeLab.apk }
 
   windows:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
@@ -51,9 +51,9 @@ jobs:
         run: npx electron-builder --win --publish never
       - name: .exe'yi tasi
         shell: bash
-        run: cp dist-electron/*Setup*.exe Miller-3B-Setup.exe
+        run: cp dist-electron/*Setup*.exe LatticeLab-Setup.exe
       - uses: actions/upload-artifact@v4
-        with: { name: exe, path: Miller-3B-Setup.exe }
+        with: { name: exe, path: LatticeLab-Setup.exe }
 
   release:
     needs: [android, windows]
@@ -63,16 +63,22 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { path: artifacts }
+      - name: Eski release'i temizle (yeniden olusturulacak)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "$TAG" --yes --cleanup-tag --repo "${{ github.repository }}" || true
       - name: GitHub Release olustur (APK + EXE ekli)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          name: Miller 3B ${{ env.TAG }}
+          name: LatticeLab ${{ env.TAG }}
           body: |
-            Miller İndisleri 3B — ${{ env.TAG }}
+            LatticeLab — ${{ env.TAG }}
 
-            - **Android:** `Miller-3B.apk` (telefon/tablet)
-            - **Windows:** `Miller-3B-Setup.exe` (PC kurulum)
+            Malzeme Biliminin Temelleri • kristal yapıları, Miller düzlemleri/doğrultuları, LAY/DAY/APF.
+
+            - **Android:** `LatticeLab.apk` (telefon/tablet)
+            - **Windows:** `LatticeLab-Setup.exe` (PC kurulum)
           files: |
-            artifacts/apk/Miller-3B.apk
-            artifacts/exe/Miller-3B-Setup.exe
+            artifacts/apk/LatticeLab.apk
+            artifacts/exe/LatticeLab-Setup.exe
