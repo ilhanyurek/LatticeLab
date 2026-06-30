@@ -1,0 +1,71 @@
+name: Release (APK + Windows EXE)
+
+# v1.0 gibi bir etiket (tag) push edilince calisir; APK ve .exe uretip
+# GitHub Release'e ikisini birden yukler.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - name: APK derle (imzali release)
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+      - name: APK'yi yeniden adlandir
+        run: cp android/app/build/outputs/apk/release/app-release.apk Miller-3B.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: Miller-3B.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npm run build
+      - name: Windows .exe derle (electron-builder)
+        run: npx electron-builder --win --publish never
+      - name: .exe'yi tasi
+        shell: bash
+        run: cp dist-electron/*Setup*.exe Miller-3B-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: Miller-3B-Setup.exe
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: GitHub Release olustur (APK + EXE ekli)
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Miller 3B ${{ github.ref_name }}
+          body: |
+            Miller İndisleri 3B — ${{ github.ref_name }}
+
+            - **Android:** `Miller-3B.apk` (telefon/tablet)
+            - **Windows:** `Miller-3B-Setup.exe` (PC kurulum)
+          files: |
+            artifacts/apk/Miller-3B.apk
+            artifacts/exe/Miller-3B-Setup.exe

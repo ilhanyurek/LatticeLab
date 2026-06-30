@@ -1,14 +1,43 @@
 {
   "name": "miller-3d",
-  "version": "1.6.0",
+  "version": "1.0.0",
   "description": "Miller indisleri 3D egitim uygulamasi (BK/HMK/YMK/HSP)",
+  "author": "ilhanyurek",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "electron:dev": "vite build && electron .",
+    "electron:build": "vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.miller3d.app",
+    "productName": "Miller 3B",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.ico"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Miller 3B"
+    }
   },
   "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
     "vite": "^5.4.10"
   },
   "dependencies": {

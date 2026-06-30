@@ -21,3 +21,6 @@ captures/
 # Imza anahtari REPODA TUTULUR (sabit imza -> guncellemeler silmeden kurulur).
 # Bu egitim uygulamasi yan-yukleme ile dagitildigi icin bilincli bir tercihtir.
 *.idsig
+
+# Electron cikti
+dist-electron/
