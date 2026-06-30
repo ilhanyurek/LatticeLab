@@ -1,60 +1,103 @@
-# Miller İndisleri 3B
+<img src="build/icon.png" width="92" align="left" alt="LatticeLab" hspace="12">
 
-**Metalurji ve Malzeme Mühendisliği — Malzeme Biliminin Temelleri** dersi için
-kristal **düzlemlerini (hkl)** ve **doğrultularını [uvw]** 3 boyutlu gösteren
-etkileşimli eğitim uygulaması. Telefon, tablet ve bilgisayarda (tarayıcıda ve
-Android APK olarak) çalışır.
+# LatticeLab
 
-## Özellikler
+**Malzeme Biliminin Temelleri** için 3 boyutlu, etkileşimli bir öğrenme aracı.
+Kristal yapıları, **Miller düzlemlerini (hkl)** ve **doğrultularını [uvw]** telefon,
+tablet ve bilgisayarda görselleştirir; LAY/DAY/APF hesaplarını adım adım gösterir.
 
-- **Kristal yapılar:** BK (Basit Kübik / SC), HMK (Hacim Merkezli Kübik / BCC),
-  YMK (Yüzey Merkezli Kübik / FCC), HSP (Hekzagonal Sıkı Paket / HCP).
-- **Eksenler:** Kübikler için x–y–z, HSP için a1–a2–a3–c. Eksenler, hücre dış
-  hattından **farklı renkte** çizilir (kübik eksenler kırmızı/yeşil/mavi,
-  HSP a-eksenleri turuncu, c ekseni camgöbeği).
-- **Düzlemler (hkl):** Negatif ve sıfır indisler dahil — örn. `(100)`, `(-200)`,
-  `(111)`. Negatif indislerde **orijin otomatik kaydırılır** ki düzlem hücre
-  içinde görünsün. Düzlemler arası mesafe (d) de gösterilir.
-- **Doğrultular [uvw]:** Kübik 3-indis ve HSP 4-indis `[uvtw]` (otomatik
-  `t = -(u+v)` ve 3-indis karşılığı).
-- **LAY (Lineer Atom Yoğunluğu):** Seçilen doğrultu üzerindeki komşu atom
-  aralığından `LAY = 1 / aralık` hesaplanır (a ve r cinsinden).
-- **DAY (Düzlemsel Atom Yoğunluğu):** Seçilen düzlemdeki ilkel 2B hücre
-  alanından `DAY = 1 / alan` hesaplanır (a ve r cinsinden).
-- **Görünüm:** Top-çubuk / dolu (temas eden atomlar) modu, atom/eksen/hücre
-  aç-kapa, dokunmatik döndürme-yakınlaştırma (mobil uyumlu).
-- **Yapı bilgisi:** Atom/hücre, koordinasyon sayısı, APF, a/r, c/a, örnek metaller.
+<br clear="left">
 
-## Geliştirme
+> Metalurji ve Malzeme Mühendisliği öğrencileri için hazırlanmıştır.
+> Türkçe ve İngilizce dil desteği vardır.
+
+---
+
+## 📲 İndir ve Kur
+
+En güncel sürümü **[Releases](../../releases/latest)** sayfasından indirebilirsin:
+
+| Platform | Dosya | Kurulum |
+|---|---|---|
+| **Android** (telefon/tablet) | `LatticeLab.apk` | İndir → "bilinmeyen kaynaklara izin ver" → kur |
+| **Windows** (PC) | `LatticeLab-Setup.exe` | İndir → çalıştır → kur |
+
+> Güncellemeler aynı imza ile yayınlandığı için Android'de **eskiyi silmeden**
+> üzerine kurulur.
+
+---
+
+## ✨ Özellikler
+
+**Kristal yapılar (3B, döndür–yakınlaştır):**
+- **Saf metaller:** BK (Basit Kübik), HMK (HMK/BCC), YMK (YMK/FCC), HSP (HSP/HCP)
+- **Bileşikler:** NaCl, CsCl, ZnS (sfalerit), CaF₂ (florit) — iyonlar ayrı renk/boyut
+
+**Miller indisleri:**
+- **Düzlemler (hkl):** negatif/sıfır indis dahil — `(100)`, `(-200)`, `(111)`…
+  Negatif indiste orijin otomatik kaydırılır; düzlemler arası mesafe (d) gösterilir.
+- **Doğrultular [uvw]:** kübik 3-indis ve HSP 4-indis `[uvtw]` (otomatik dönüşüm).
+- Eksenler hücre dış hattından **farklı renkte:** kübikte x–y–z, HSP'de a1–a2–a3–c
+  (c ekseni dik, standart görünüm).
+
+**Hesaplamalar (formül + sonuç, a ve r cinsinden):**
+- **LAY** — Lineer Atom Yoğunluğu
+- **DAY** — Düzlemsel Atom Yoğunluğu
+- **APF/ADF** — Atomik Dolgu Faktörü
+
+**Bileşiklerde:** tetrahedral / oktahedral / kübik **boşluk** ve **koordinasyon**
+açıklamaları.
+
+**Diğer:** top–çubuk / dolu (temas eden atom) görünümü, atom/eksen/hücre aç-kapa,
+dokunmatik kontroller, ⚙ Ayarlar'da dil ve iletişim.
+
+---
+
+## 🧮 Doğruluk
+
+Hesaplar bilinen değerlerle doğrulanmıştır; örn. **YMK [110] LAY = 0,5/r** ve
+**YMK (111) DAY = 0,289/r²** (Callister ile uyumlu).
+
+---
+
+## 🛠️ Geliştirme
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # dist/ üretir
+npm run dev        # tarayıcıda geliştirme (http://localhost:5173)
+npm run build      # web çıktısı -> dist/
 ```
 
-Teknoloji: [Three.js](https://threejs.org) + [Vite](https://vitejs.dev).
-Hesaplama doğrulaması: FCC `[110]` LAY = 0.5/r, FCC `(111)` DAY = 0.289/r²
-(Callister değerleriyle uyumlu).
+**Teknoloji:** [Three.js](https://threejs.org) (3B) + [Vite](https://vitejs.dev)
+(paketleme) + [Capacitor](https://capacitorjs.com) (Android) +
+[Electron](https://electronjs.org) (Windows).
 
-## Android APK
-
-Uygulama [Capacitor](https://capacitorjs.com) ile Android'e paketlenir.
-
+### Android APK derleme
 ```bash
 npm run build
 npx cap sync android
-cd android
-./gradlew :app:assembleDebug
-# Çıktı: android/app/build/outputs/apk/debug/app-debug.apk
+cd android && ./gradlew assembleRelease
+# Çıktı: android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Her push'ta **GitHub Actions** (`.github/workflows/android.yml`) APK'yı otomatik
-derler ve artifact olarak yükler.
+### Windows .exe derleme
+```bash
+npm run electron:build      # dist-electron/ içine kurulum .exe'si üretir
+```
 
-> PC için `.exe` (Electron/Tauri) paketlemesi sonraki aşamada eklenecek.
+### Otomatik yayın (GitHub Actions)
+Commit mesajında **`[release]`** geçen bir push, APK + Windows .exe derleyip
+**GitHub Release**'e (`v1.0`) ikisini birden yükler. Bkz:
+`.github/workflows/release.yml`.
 
-## Kurulum (telefon)
+---
 
-`Miller-3B-vX.Y.apk` dosyasını telefona aktar → Ayarlar'da "bilinmeyen
-kaynaklardan kuruluma izin ver" → APK'ya dokunup kur.
+## 🗺️ Yol Haritası
+- Hume-Rothery kuralları (katı çözünürlük)
+- Teorik yoğunluk (ρ) hesabı
+- İndis ailesi gösterimi `{hkl}` / `⟨uvw⟩`
+
+---
+
+## 📬 İletişim
+Soru, öneri ve hata bildirimi: **contact@ilhanyurek.com**
