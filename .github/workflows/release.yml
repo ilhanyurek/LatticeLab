@@ -6,6 +6,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Surum etiketi (or. v1.0)'
+        default: 'v1.0'
+        required: true
 
 permissions:
   contents: write
@@ -54,15 +59,18 @@ jobs:
   release:
     needs: [android, windows]
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
     steps:
       - uses: actions/download-artifact@v4
         with: { path: artifacts }
       - name: GitHub Release olustur (APK + EXE ekli)
         uses: softprops/action-gh-release@v2
         with:
-          name: Miller 3B ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          name: Miller 3B ${{ env.TAG }}
           body: |
-            Miller İndisleri 3B — ${{ github.ref_name }}
+            Miller İndisleri 3B — ${{ env.TAG }}
 
             - **Android:** `Miller-3B.apk` (telefon/tablet)
             - **Windows:** `Miller-3B-Setup.exe` (PC kurulum)
