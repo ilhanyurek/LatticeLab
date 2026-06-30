@@ -28,7 +28,19 @@ app.innerHTML = `
   <div id="settings" class="modal hidden"></div>
 `;
 
-const scene = new CrystalScene(document.getElementById('gl'));
+let scene;
+try {
+  scene = new CrystalScene(document.getElementById('gl'));
+} catch (e) {
+  document.getElementById('viewport').innerHTML =
+    `<div class="glfail">
+       <h2>⚠️ 3B görüntüleme başlatılamadı</h2>
+       <p>Cihazınızın tarayıcı/WebGL desteği yetersiz olabilir. Lütfen sistem
+       "Android System WebView" ve Chrome uygulamasını güncelleyip tekrar deneyin.</p>
+       <p style="opacity:.6;font-size:12px">${(e && e.message) || e}</p>
+     </div>`;
+  throw e;
+}
 let current = STRUCTURES.BK;
 let category = 'metal';
 let lastPlane = null;
@@ -113,7 +125,7 @@ function renderPanel() {
   sections += `
     <section>
       <h2>${t('sec_plane')}</h2>
-      <div id="planeInputs" class="indices">${planeInputs}</div>
+      <div id="planeInputs" class="indices${hex ? ' hex' : ''}">${planeInputs}</div>
       <div class="btnrow">
         <button id="drawPlane" class="primary">${t('drawPlane')}</button>
         <button id="clearPlane">${t('clear')}</button>
@@ -124,13 +136,19 @@ function renderPanel() {
 
     <section>
       <h2>${t('sec_dir')}</h2>
-      <div id="dirInputs" class="indices">${dirInputs}</div>
+      <div id="dirInputs" class="indices${hex ? ' hex' : ''}">${dirInputs}</div>
       <div class="btnrow">
         <button id="drawDir" class="primary">${t('drawDir')}</button>
         <button id="clearDir">${t('clear')}</button>
       </div>
       <div id="dirOut" class="out"></div>
       ${isCompound ? '' : `<button id="calcLAY" class="calc">${t('calcLAY')}</button><div id="layOut" class="out"></div>`}
+    </section>
+
+    <section>
+      <h2>${t('contact')}</h2>
+      <p class="dim" style="margin:0 0 8px;font-size:13px">${t('contact_text')}</p>
+      <a class="contact-link" href="mailto:${CONTACT_EMAIL}">✉ ${CONTACT_EMAIL}</a>
     </section>
 
     <section class="foot">

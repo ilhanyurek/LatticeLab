@@ -17,3 +17,9 @@ android/local.properties
 android/.idea/
 *.iml
 captures/
+
+# Release imza anahtari (gizli)
+release-key.jks
+*.jks
+*.keystore
+*.idsig
