@@ -18,8 +18,6 @@ android/.idea/
 *.iml
 captures/
 
-# Release imza anahtari (gizli)
-release-key.jks
-*.jks
-*.keystore
+# Imza anahtari REPODA TUTULUR (sabit imza -> guncellemeler silmeden kurulur).
+# Bu egitim uygulamasi yan-yukleme ile dagitildigi icin bilincli bir tercihtir.
 *.idsig

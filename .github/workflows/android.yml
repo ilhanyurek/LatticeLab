@@ -31,14 +31,14 @@ jobs:
       - name: Capacitor senkronize et
         run: npx cap sync android
 
-      - name: APK derle (debug)
+      - name: APK derle (imzali release)
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleRelease --no-daemon
 
       - name: APK'yı yükle (artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: Miller-3B-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Miller-3B-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
