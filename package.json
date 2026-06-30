@@ -1,6 +1,6 @@
 {
   "name": "miller-3d",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Miller indisleri 3D egitim uygulamasi (BK/HMK/YMK/HSP)",
   "type": "module",
   "scripts": {

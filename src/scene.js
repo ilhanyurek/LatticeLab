@@ -97,8 +97,12 @@ export class CrystalScene {
   _center() {
     const s = this.structure;
     if (s.system === 'cubic') {
+      this.root.rotation.set(0, 0, 0);
       this.root.position.set(-0.5, -0.5, -0.5);
     } else {
+      // Modelde c ekseni +Z; sahnede "yukari" +Y oldugu icin prizmayi
+      // X ekseni etrafinda -90° dondurup c'yi dikey yapariz (standart gorunum).
+      this.root.rotation.set(-Math.PI / 2, 0, 0);
       this.root.position.set(0, -HCP_C_OVER_A / 2, 0);
     }
   }
