@@ -1,10 +1,10 @@
 name: Release (APK + Windows EXE)
 
-# v1.0 gibi bir etiket (tag) push edilince calisir; APK ve .exe uretip
-# GitHub Release'e ikisini birden yukler.
+# Bu ortam tag push'unu ve (main disi workflow icin) dispatch'i engelledigi
+# icin: commit mesajinda [release] gecince calisir. Yayin etiketi RELEASE_TAG.
 on:
   push:
-    tags: ['v*']
+    branches: ['**']
   workflow_dispatch:
     inputs:
       version:
@@ -15,8 +15,12 @@ on:
 permissions:
   contents: write
 
+env:
+  RELEASE_TAG: v1.0
+
 jobs:
   android:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,14 +35,12 @@ jobs:
           cd android
           chmod +x ./gradlew
           ./gradlew :app:assembleRelease --no-daemon
-      - name: APK'yi yeniden adlandir
-        run: cp android/app/build/outputs/apk/release/app-release.apk Miller-3B.apk
+      - run: cp android/app/build/outputs/apk/release/app-release.apk Miller-3B.apk
       - uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: Miller-3B.apk
+        with: { name: apk, path: Miller-3B.apk }
 
   windows:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,15 +54,13 @@ jobs:
         shell: bash
         run: cp dist-electron/*Setup*.exe Miller-3B-Setup.exe
       - uses: actions/upload-artifact@v4
-        with:
-          name: exe
-          path: Miller-3B-Setup.exe
+        with: { name: exe, path: Miller-3B-Setup.exe }
 
   release:
     needs: [android, windows]
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || env.RELEASE_TAG }}
     steps:
       - uses: actions/download-artifact@v4
         with: { path: artifacts }
