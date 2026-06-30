@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Capacitor / Android build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+.gradle/
+*.apk
+!*-release-unsigned.apk
+
+# Android Studio
+android/.idea/
+*.iml
+captures/
+
+# Imza anahtari REPODA TUTULUR (sabit imza -> guncellemeler silmeden kurulur).
+# Bu egitim uygulamasi yan-yukleme ile dagitildigi icin bilincli bir tercihtir.
+*.idsig
+
+# Electron cikti
+dist-electron/

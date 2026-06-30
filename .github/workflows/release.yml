@@ -1,0 +1,84 @@
+name: Release (APK + Windows EXE)
+
+# Bu ortam tag push'unu ve (main disi workflow icin) dispatch'i engelledigi
+# icin: commit mesajinda [release] gecince calisir. Yayin etiketi asagidaki TAG.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Surum etiketi (or. v1.0)'
+        default: 'v1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npm run build
+      - name: Capacitor senkronize et (cordova.variables.gradle vb. uret)
+        run: npx cap sync android
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - name: APK derle (imzali release)
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+      - run: cp android/app/build/outputs/apk/release/app-release.apk LatticeLab.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: apk, path: LatticeLab.apk }
+
+  windows:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npm run build
+      - name: Windows .exe derle (electron-builder)
+        run: npx electron-builder --win --publish never
+      - name: .exe'yi tasi
+        shell: bash
+        run: cp dist-electron/*Setup*.exe LatticeLab-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: exe, path: LatticeLab-Setup.exe }
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || 'v1.0' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Eski release'i temizle (yeniden olusturulacak)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "$TAG" --yes --cleanup-tag --repo "${{ github.repository }}" || true
+      - name: GitHub Release olustur (APK + EXE ekli)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: LatticeLab ${{ env.TAG }}
+          body: |
+            LatticeLab — ${{ env.TAG }}
+
+            Malzeme Biliminin Temelleri • kristal yapıları, Miller düzlemleri/doğrultuları, LAY/DAY/APF.
+
+            - **Android:** `LatticeLab.apk` (telefon/tablet)
+            - **Windows:** `LatticeLab-Setup.exe` (PC kurulum)
+          files: |
+            artifacts/apk/LatticeLab.apk
+            artifacts/exe/LatticeLab-Setup.exe
