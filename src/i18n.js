@@ -163,14 +163,43 @@ const DICT = {
   },
 };
 
-let lang = localStorage.getItem('miller_lang') || 'tr';
+// Baslangic dili su sirayla belirlenir:
+//   1) kullanicinin bu uygulamada daha once yaptigi secim
+//   2) uygulama siteye gomuluyken sitenin dil tercihi (ilhanyurek.com ile ayni
+//      kaynakta calistigi icin localStorage paylasilir)
+//   3) sayfanin <html lang> degeri: web kopyasinda 'en', APK/Windows'ta 'tr'
+//   4) 'tr'
+function oku(anahtar) {
+  try {
+    const v = localStorage.getItem(anahtar);
+    return v === 'tr' || v === 'en' ? v : null;
+  } catch {
+    return null; // file:// gibi depolamaya izin verilmeyen ortamlar
+  }
+}
+
+function baslangicDili() {
+  const belge = document.documentElement.lang;
+  return (
+    oku('miller_lang') ||
+    oku('lang') ||
+    (belge === 'tr' || belge === 'en' ? belge : null) ||
+    'tr'
+  );
+}
+
+let lang = baslangicDili();
 
 export function getLang() {
   return lang;
 }
 export function setLang(l) {
   lang = l;
-  localStorage.setItem('miller_lang', l);
+  try {
+    localStorage.setItem('miller_lang', l);
+  } catch {
+    // depolama yoksa secim yalnizca bu oturum icin gecerli olur
+  }
 }
 export function t(key, vars) {
   let s = (DICT[lang] && DICT[lang][key]) || DICT.tr[key] || key;
