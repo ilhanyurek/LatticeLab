@@ -34,9 +34,8 @@ try {
 } catch (e) {
   document.getElementById('viewport').innerHTML =
     `<div class="glfail">
-       <h2>⚠️ 3B görüntüleme başlatılamadı</h2>
-       <p>Cihazınızın tarayıcı/WebGL desteği yetersiz olabilir. Lütfen sistem
-       "Android System WebView" ve Chrome uygulamasını güncelleyip tekrar deneyin.</p>
+       <h2>⚠️ ${t('glfail_title')}</h2>
+       <p>${t('glfail_body')}</p>
        <p style="opacity:.6;font-size:12px">${(e && e.message) || e}</p>
      </div>`;
   throw e;
@@ -71,10 +70,10 @@ function renderPanel() {
   const hex = current.system === 'hexagonal';
   const isCompound = current.category === 'compound';
   const metalBtns = Object.values(STRUCTURES)
-    .map((s) => `<button class="seg sbtn-st" data-st="${s.id}" title="${s.label}">${s.id}</button>`)
+    .map((s) => `<button class="seg sbtn-st" data-st="${s.id}" title="${t('name_' + s.id)}">${t('abbr_' + s.id)}</button>`)
     .join('');
   const compBtns = Object.values(COMPOUNDS)
-    .map((s) => `<button class="seg sbtn-st" data-st="${s.id}" title="${s.label}">${s.formula}</button>`)
+    .map((s) => `<button class="seg sbtn-st" data-st="${s.id}" title="${t('name_' + s.id)}">${s.formula}</button>`)
     .join('');
 
   const planeInputs = hex
@@ -181,12 +180,12 @@ function renderStructInfo() {
       [t('i_formula'), s.formula],
       [t('i_system'), t('cubic')],
       [t('i_coord'), s.coordination],
-      [t('i_type'), s.structureType],
-      [t('i_example'), s.example],
+      [t('i_type'), t('type_' + s.id)],
+      [t('i_example'), t('ex_' + s.id)],
     ];
   } else {
     rows = [
-      [t('i_name'), s.label],
+      [t('i_name'), t('name_' + s.id)],
       [t('i_system'), s.system === 'cubic' ? t('cubic') : t('hexagonal')],
       [t('i_atoms_cell'), s.atomsPerCell],
       [t('i_coord'), s.coordination],
@@ -194,7 +193,7 @@ function renderStructInfo() {
       [t('i_ar'), s.aOverR.toFixed(4) + '·r'],
     ];
     if (s.cOverA) rows.push([t('i_ca'), s.cOverA.toFixed(3)]);
-    rows.push([t('i_example'), s.example]);
+    rows.push([t('i_example'), t('ex_' + s.id)]);
   }
   $('structInfo').innerHTML = rows
     .map((r) => `<div><span>${r[0]}</span><b>${r[1]}</b></div>`)
