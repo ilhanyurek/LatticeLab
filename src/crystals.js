@@ -64,11 +64,12 @@ function hcpAtoms() {
 }
 
 // --- YAPI KATALOGU ---------------------------------------------------------
+// Burada yalnizca fizik verisi durur. Gorunen metinler (yapi adi, kisaltma,
+// yapi tipi, ornekler) i18n.js'te id'ye gore anahtarlanir: name_/abbr_/type_/ex_
 
 export const STRUCTURES = {
   BK: {
     id: 'BK',
-    label: 'Basit Kübik (BK / SC)',
     system: 'cubic',
     atoms: cubicAtoms('SC'),
     a: 1,
@@ -79,11 +80,9 @@ export const STRUCTURES = {
     coordination: 6,
     apf: Math.PI / 6, // 0.5236
     touchRadius: 0.5, // a birimi cinsinden temas yaricapi (a=2r -> r=0.5a)
-    example: 'Po',
   },
   HMK: {
     id: 'HMK',
-    label: 'Hacim Merkezli Kübik (HMK / BCC)',
     system: 'cubic',
     atoms: cubicAtoms('BCC'),
     a: 1,
@@ -93,11 +92,9 @@ export const STRUCTURES = {
     coordination: 8,
     apf: (SQRT3 * Math.PI) / 8, // 0.6802
     touchRadius: SQRT3 / 4, // 0.4330
-    example: 'Fe(α), Cr, W',
   },
   YMK: {
     id: 'YMK',
-    label: 'Yüzey Merkezli Kübik (YMK / FCC)',
     system: 'cubic',
     atoms: cubicAtoms('FCC'),
     a: 1,
@@ -107,11 +104,9 @@ export const STRUCTURES = {
     coordination: 12,
     apf: (SQRT2 * Math.PI) / 6, // 0.7405
     touchRadius: SQRT2 / 4, // 0.3536
-    example: 'Al, Cu, Au, Ni, Fe(γ)',
   },
   HSP: {
     id: 'HSP',
-    label: 'Hekzagonal Sıkı Paket (HSP / HCP)',
     system: 'hexagonal',
     atoms: hcpAtoms(),
     a: 1,
@@ -121,7 +116,6 @@ export const STRUCTURES = {
     coordination: 12,
     apf: Math.PI / (3 * SQRT2), // 0.7405
     touchRadius: 0.5,
-    example: 'Mg, Zn, Ti, Co',
   },
 };
 
@@ -179,7 +173,6 @@ function mkAtoms(aPos, bPos) {
 export const COMPOUNDS = {
   NaCl: {
     id: 'NaCl',
-    label: 'NaCl — Kaya Tuzu',
     system: 'cubic',
     category: 'compound',
     a: 1,
@@ -191,12 +184,9 @@ export const COMPOUNDS = {
     formula: 'NaCl',
     coordination: '6 : 6',
     voidType: 'octahedral',
-    structureType: 'YMK (FCC) + tüm oktahedral boşluklar',
-    example: 'NaCl, MgO, FeO, LiF',
   },
   CsCl: {
     id: 'CsCl',
-    label: 'CsCl',
     system: 'cubic',
     category: 'compound',
     a: 1,
@@ -211,12 +201,9 @@ export const COMPOUNDS = {
     formula: 'CsCl',
     coordination: '8 : 8',
     voidType: 'cubic',
-    structureType: 'Basit kübik + kübik boşluk (HMK değil!)',
-    example: 'CsCl, CsBr, NH₄Cl',
   },
   ZnS: {
     id: 'ZnS',
-    label: 'ZnS — Sfalerit',
     system: 'cubic',
     category: 'compound',
     a: 1,
@@ -228,12 +215,9 @@ export const COMPOUNDS = {
     formula: 'ZnS',
     coordination: '4 : 4',
     voidType: 'tetrahedral',
-    structureType: 'YMK (FCC) + tetrahedral boşlukların yarısı',
-    example: 'ZnS, GaAs, β-SiC, elmas(C)',
   },
   CaF2: {
     id: 'CaF2',
-    label: 'CaF₂ — Florit',
     system: 'cubic',
     category: 'compound',
     a: 1,
@@ -245,8 +229,6 @@ export const COMPOUNDS = {
     formula: 'CaF₂',
     coordination: '8 : 4',
     voidType: 'tetrahedral-all',
-    structureType: 'YMK (FCC) Ca²⁺ + tüm tetrahedral boşluklarda F⁻',
-    example: 'CaF₂, UO₂, ZrO₂, ThO₂',
   },
 };
 
