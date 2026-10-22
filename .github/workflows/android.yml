@@ -1,0 +1,50 @@
+name: Android APK (elle)
+
+# APK artik yayinlanmiyor (bkz. release.yml). Bu workflow yalnizca istendiginde,
+# elle calistirilir ve ciktiyi GitHub Release'e degil, calisma artifact'ina koyar.
+#
+# Calistirmak icin: Actions > "Android APK (elle)" > Run workflow.
+# Bitince kosunun sayfasindaki "apk" artifact'i indirilir (zip icinde
+# LatticeLab.apk). Artifact'lar varsayilan olarak 90 gun saklanir.
+#
+# Imzalama repodaki sabit anahtarla yapilir, yani uretilen APK onceki
+# kurulumlarin uzerine silmeden kurulabilir.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm ci
+
+      - name: Web yapisini derle (Vite)
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Capacitor senkronize et
+        run: npx cap sync android
+
+      - name: APK derle (imzali release)
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - run: cp android/app/build/outputs/apk/release/app-release.apk LatticeLab.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: LatticeLab.apk
