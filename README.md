@@ -15,15 +15,13 @@ tablet ve bilgisayarda görselleştirir; LAY/DAY/APF hesaplarını adım adım g
 
 ## 📲 İndir ve Kur
 
-En güncel sürümü **[Releases](../../releases/latest)** sayfasından indirebilirsin:
+Uygulamayı tarayıcıda hemen açabilir ya da Windows kurulumunu
+**[Releases](../../releases/latest)** sayfasından indirebilirsin:
 
-| Platform | Dosya | Kurulum |
-|---|---|---|
-| **Android** (telefon/tablet) | `LatticeLab.apk` | İndir → "bilinmeyen kaynaklara izin ver" → kur |
-| **Windows** (PC) | `LatticeLab-Setup.exe` | İndir → çalıştır → kur |
-
-> Güncellemeler aynı imza ile yayınlandığı için Android'de **eskiyi silmeden**
-> üzerine kurulur.
+| Platform | Nasıl |
+|---|---|
+| **Tarayıcı** (her cihaz) | [ilhanyurek.github.io/LatticeLab](https://ilhanyurek.github.io/LatticeLab/) — kurulum gerekmez |
+| **Windows** (PC) | `LatticeLab-Setup.exe` → indir → çalıştır → kur |
 
 ---
 
@@ -73,6 +71,8 @@ npm run build      # web çıktısı -> dist/
 [Electron](https://electronjs.org) (Windows).
 
 ### Android APK derleme
+> Android artık yayınlanmıyor; aşağıdaki adımlarla yerelde derlenebilir.
+
 ```bash
 npm run build
 npx cap sync android
@@ -86,9 +86,11 @@ npm run electron:build      # dist-electron/ içine kurulum .exe'si üretir
 ```
 
 ### Otomatik yayın (GitHub Actions)
-Commit mesajında **`[release]`** geçen bir push, APK + Windows .exe derleyip
-**GitHub Release**'e (`v1.0`) ikisini birden yükler. Bkz:
-`.github/workflows/release.yml`.
+Commit mesajında **`[release]`** geçen bir push, Windows .exe derleyip
+**GitHub Release**'e (`v1.0`) yükler. Bkz: `.github/workflows/release.yml`.
+
+Tarayıcı sürümü ayrı yayınlanır: `main`'e her push'ta
+`.github/workflows/pages.yml` çalışır.
 
 ---
 
