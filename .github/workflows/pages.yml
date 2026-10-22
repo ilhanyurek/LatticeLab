@@ -1,0 +1,61 @@
+name: GitHub Pages
+
+# Uygulamayi https://ilhanyurek.github.io/LatticeLab/ adresinde yayinlar.
+# Amaci, siteye gomulu kopyadan bagimsiz, tek basina paylasilabilir bir
+# baglanti saglamak (ornegin APK/EXE ile birlikte bir klasorde).
+#
+# Repodaki index.html lang="tr" oldugu icin bu surum Turkce acilir; dil
+# ayarlardan degistirilebilir. (ilhanyurek.com/lab/ kopyasini mypage'teki
+# senkron betigi lang="en" ile uretir, o yuzden orada Ingilizce acilir.)
+#
+# Ilk calismada Pages'i kendisi etkinlestirir (configure-pages enablement),
+# repo ayarlarindan elle acmak gerekmez.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Yayin sirasi korunur; calisan bir yayin yarida kesilmez.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pages'i hazirla
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      # base, github.io altindaki repo adiyla ayni olmali
+      - run: npx vite build --base=/LatticeLab/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
