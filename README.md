@@ -71,7 +71,9 @@ npm run build      # web çıktısı -> dist/
 [Electron](https://electronjs.org) (Windows).
 
 ### Android APK derleme
-> Android artık yayınlanmıyor; aşağıdaki adımlarla yerelde derlenebilir.
+> Android artık yayınlanmıyor. APK gerektiğinde Actions sekmesinden
+> **Android APK (elle)** workflow'u çalıştırılarak üretilir; çıktı o koşunun
+> artifact'ında olur. Yerelde derlemek için:
 
 ```bash
 npm run build
