@@ -8,8 +8,11 @@ name: GitHub Pages
 # ayarlardan degistirilebilir. (ilhanyurek.com/lab/ kopyasini mypage'teki
 # senkron betigi lang="en" ile uretir, o yuzden orada Ingilizce acilir.)
 #
-# Ilk calismada Pages'i kendisi etkinlestirir (configure-pages enablement),
-# repo ayarlarindan elle acmak gerekmez.
+# TEK SEFERLIK AYAR: repo ayarlarindan Pages acik olmali.
+#   Settings > Pages > Build and deployment > Source: "GitHub Actions"
+# Bunu workflow kendisi yapamaz: GITHUB_TOKEN'in Pages sitesi *olusturma*
+# yetkisi yoktur ("Resource not accessible by integration"). Ayar bir kez
+# yapildiktan sonra her push'ta kendiliginden yayinlanir.
 
 on:
   push:
@@ -31,11 +34,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Pages'i hazirla
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/setup-node@v4
         with:
