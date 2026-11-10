@@ -123,7 +123,8 @@ export const STRUCTURES = {
 Object.values(STRUCTURES).forEach((s) => (s.category = 'metal'));
 
 // --- BILESIK YAPILAR -------------------------------------------------------
-// Iki tur iyon: 'A' (genelde anyon/buyuk) ve 'B' (genelde katyon/kucuk).
+// Iki tur iyon: 'A' kafesi kuran iyon, 'B' bosluklara yerlesen iyon.
+// r: hucre kenari a = 1 alinarak temas eden (dolu) yaricap; pm: Shannon yaricapi.
 
 function fccSites() {
   // koseler + yuz merkezleri
@@ -178,12 +179,14 @@ export const COMPOUNDS = {
     a: 1,
     atoms: mkAtoms(fccSites(), octahedralSites()),
     species: {
-      A: { label: 'Cl⁻', color: 0x66bb6a, r: 0.30 },
-      B: { label: 'Na⁺', color: 0xe91e63, r: 0.16 },
+      // Shannon iyon yaricaplari (pm) / gercek a = 564 pm -> temas eder
+      A: { label: 'Cl⁻', color: 0x66bb6a, r: 0.321, pm: 181 },
+      B: { label: 'Na⁺', color: 0xe91e63, r: 0.181, pm: 102 },
     },
     formula: 'NaCl',
     coordination: '6 : 6',
     voidType: 'octahedral',
+    cation: 'B', anion: 'A',
   },
   CsCl: {
     id: 'CsCl',
@@ -195,12 +198,14 @@ export const COMPOUNDS = {
       [[0.5, 0.5, 0.5]]
     ),
     species: {
-      A: { label: 'Cl⁻', color: 0x66bb6a, r: 0.30 },
-      B: { label: 'Cs⁺', color: 0xe91e63, r: 0.22 },
+      // a = 412 pm; temas cisim kosegeni boyunca
+      A: { label: 'Cl⁻', color: 0x66bb6a, r: 0.437, pm: 181 },
+      B: { label: 'Cs⁺', color: 0xe91e63, r: 0.420, pm: 174 },
     },
     formula: 'CsCl',
     coordination: '8 : 8',
     voidType: 'cubic',
+    cation: 'B', anion: 'A',
   },
   ZnS: {
     id: 'ZnS',
@@ -209,12 +214,14 @@ export const COMPOUNDS = {
     a: 1,
     atoms: mkAtoms(fccSites(), ZNS_TET),
     species: {
-      A: { label: 'S²⁻', color: 0x66bb6a, r: 0.30 },
-      B: { label: 'Zn²⁺', color: 0xe91e63, r: 0.16 },
+      // a = 541 pm; temas <111> boyunca (r+R = a·√3/4)
+      A: { label: 'S²⁻', color: 0x66bb6a, r: 0.327, pm: 184 },
+      B: { label: 'Zn²⁺', color: 0xe91e63, r: 0.107, pm: 60 },
     },
     formula: 'ZnS',
     coordination: '4 : 4',
     voidType: 'tetrahedral',
+    cation: 'B', anion: 'A',
   },
   CaF2: {
     id: 'CaF2',
@@ -223,15 +230,25 @@ export const COMPOUNDS = {
     a: 1,
     atoms: mkAtoms(fccSites(), tetrahedralSites()),
     species: {
-      A: { label: 'Ca²⁺', color: 0x42a5f5, r: 0.24 },
-      B: { label: 'F⁻', color: 0xffa726, r: 0.16 },
+      // a = 546 pm; temas <111> boyunca. F⁻ aslinda Ca²⁺'dan buyuktur.
+      A: { label: 'Ca²⁺', color: 0x42a5f5, r: 0.200, pm: 112 },
+      B: { label: 'F⁻', color: 0xffa726, r: 0.233, pm: 131 },
     },
     formula: 'CaF₂',
     coordination: '8 : 4',
     voidType: 'tetrahedral-all',
+    cation: 'A', anion: 'B',
   },
 };
 
 export const ALL_STRUCTURES = { ...STRUCTURES, ...COMPOUNDS };
 
 export const HCP_C_OVER_A = HCP_CA;
+
+// Yogunluk hesaplari icin kafes bazi (kesirli koordinat, kafes vektorlerine gore)
+export const BASIS = {
+  BK: [[0, 0, 0]],
+  HMK: [[0, 0, 0], [0.5, 0.5, 0.5]],
+  YMK: [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]],
+  HSP: [[0, 0, 0], [2 / 3, 1 / 3, 0.5]],
+};

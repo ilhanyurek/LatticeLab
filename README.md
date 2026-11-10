@@ -32,29 +32,40 @@ Uygulamayı tarayıcıda hemen açabilir ya da Windows kurulumunu
 - **Bileşikler:** NaCl, CsCl, ZnS, CaF₂ 
 
 **Miller indisleri:**
-- **Düzlemler (hkl):**
-  Negatif indiste orijin otomatik kaydırılır; düzlemler arası mesafe (d) gösterilir.
-- **Doğrultular [uvw]:** kübik 3-indis ve HSP 4-indis `[uvtw]` (otomatik dönüşüm).
-- Eksenler hücre dış hattından **farklı renkte:** kübikte x–y–z, HSP'de a1–a2–a3–c
-  (c ekseni dik, standart görünüm).
+- **Düzlemler (hkl) / (hkil):** Negatif indiste orijin otomatik kaydırılır (kübik
+  ve HSP); düzlemler arası mesafe (d) kübik ve HSP için gösterilir.
+- **Doğrultular [uvw] / [uvtw]:** HSP 4-indis → 3-indis dönüşümü (U = u−t, V = v−t, W = w).
+- Negatif indisler ders kitabındaki gibi **üst çizgiyle** yazılır: (1̄10).
+- Ders kitabı yönelimi: **z (HSP'de c) yukarı**, x izleyiciye doğru, y sağa.
 
-**Hesaplamalar (formül + sonuç, a ve r cinsinden):**
+**Hesaplamalar (adım adım: formül, n, uzunluk/alan/hacim, sonuç; a ve r cinsinden):**
 - **LAY** — Lineer Atom Yoğunluğu
 - **DAY** — Düzlemsel Atom Yoğunluğu
 - **APF/ADF** — Atomik Dolgu Faktörü
 
 **Bileşiklerde:** tetrahedral / oktahedral / kübik **boşluk** ve **koordinasyon**
-açıklamaları.
+açıklamaları, Shannon iyon yarıçapları ve r<sub>katyon</sub>/r<sub>anyon</sub> oranı.
+Dolu görünümde iyonlar gerçek oranlarıyla birbirine temas eder.
 
-**Diğer:** top–çubuk / dolu (temas eden atom) görünümü, atom/eksen/hücre aç-kapa,
-dokunmatik kontroller, ⚙ Ayarlar'da dil ve iletişim.
+**Diğer:** top–çubuk (en yakın komşu bağları) / dolu (temas eden atom) görünümü,
+atom/eksen/hücre aç-kapa, dokunmatik kontroller, ⚙ Ayarlar'da dil ve iletişim.
 
 ---
 
 ## 🧮 Doğruluk
 
-Hesaplar bilinen değerlerle doğrulanmıştır; örn. **YMK [110] LAY = 0,5/r** ve
-**YMK (111) DAY = 0,289/r²** (Callister ile uyumlu).
+LAY/DAY, atom sayımı tam sayı aritmetiğiyle yapılarak hesaplanır; bu nedenle
+HSP gibi bazlı yapılarda ve atom içermeyen düzlemlerde de doğrudur (örn. BK (200)
+için DAY = 0). Callister ile karşılaştırılan değerler:
+
+| Yapı | Sonuç |
+|---|---|
+| YMK [110] | LAY = 0,500 / r |
+| HMK [111] | LAY = 0,500 / r |
+| YMK (111) | DAY = 0,289 / r² |
+| YMK (110) | DAY = 0,177 / r² |
+| HMK (110) | DAY = 0,265 / r² |
+| HSP (0001) | DAY = 0,289 / r² |
 
 ---
 

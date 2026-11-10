@@ -9,66 +9,112 @@ import {
   hcpDirection,
   planeNormal,
 } from './geometry.js';
-import { computeLAY, computeDAY } from './density.js';
+import { computeLAY, computeDAY, gcd } from './density.js';
 import { t, getLang, setLang } from './i18n.js';
 
 const CONTACT_EMAIL = 'contact@ilhanyurek.com';
+const IDX_MAX = 9; // indis girisi icin sinir
 
 const app = document.getElementById('app');
 // Sabit iskelet: canvas yeniden olusturulmaz (WebGL baglami korunur)
 app.innerHTML = `
   <div id="viewport">
     <canvas id="gl"></canvas>
-    <button id="menuBtn" class="menu-btn" aria-label="menu">☰</button>
-    <button id="gearBtn" class="gear-btn" aria-label="settings">⚙</button>
-    <button id="resetBtn" class="reset-btn"></button>
+    <div class="tl">
+      <button id="menuBtn" class="ovl-btn menu-btn">☰</button>
+      <button id="gearBtn" class="ovl-btn">⚙</button>
+    </div>
+    <button id="resetBtn" class="ovl-btn reset-btn"></button>
     <div id="legend" class="legend"></div>
   </div>
+  <div id="scrim" class="scrim"></div>
   <aside id="panel" class="panel"></aside>
-  <div id="settings" class="modal hidden"></div>
+  <div id="settings" class="modal hidden" role="dialog" aria-modal="true"></div>
 `;
+
+const $ = (id) => document.getElementById(id);
 
 let scene;
 try {
-  scene = new CrystalScene(document.getElementById('gl'));
+  scene = new CrystalScene($('gl'));
 } catch (e) {
-  document.getElementById('viewport').innerHTML =
-    `<div class="glfail">
+  $('viewport').innerHTML = `<div class="glfail">
        <h2>⚠️ ${t('glfail_title')}</h2>
        <p>${t('glfail_body')}</p>
        <p style="opacity:.6;font-size:12px">${(e && e.message) || e}</p>
      </div>`;
   throw e;
 }
-let current = STRUCTURES.BK;
-let category = 'metal';
-let lastPlane = null;
-let lastDir = null;
 
-// --- yardimcilar -----------------------------------------------------------
-const ov = (n) => (n < 0 ? '−' + Math.abs(n) : '' + n);
-const planeStr = (arr) => '(' + arr.map(ov).join(' ') + ')';
-const dirStr = (arr) => '[' + arr.map(ov).join(' ') + ']';
-const fmt = (x) => (Number.isFinite(x) ? x.toFixed(3) : '—');
-const $ = (id) => document.getElementById(id);
+// --- durum -----------------------------------------------------------------
+// Panel her dil/yapi degisiminde yeniden cizilir; secimler burada saklanir.
+const state = {
+  current: STRUCTURES.BK,
+  mode: 'ball',
+  vis: { atoms: true, axes: true, cell: true },
+  idx: {
+    cubic: { p: [1, 0, 0], d: [1, 1, 0] },
+    hexagonal: { p: [1, 0, 0], d: [1, 0, 0] }, // h k l / u v w (i, t turetilir)
+  },
+  plane: null, // { hkl, res }
+  dir: null, // { uvw, res }
+};
+
+// --- bicimlendirme ---------------------------------------------------------
+// Ondalik ayirac dile gore: TR'de virgul.
+const fmt = (x, d = 3) => {
+  if (!Number.isFinite(x)) return '—';
+  const s = x.toFixed(d);
+  return getLang() === 'tr' ? s.replace('.', ',') : s;
+};
+const pct = (x) => (getLang() === 'tr' ? '%' + fmt(x * 100, 2) : fmt(x * 100, 2) + '%');
+
+// Negatif indis ust cizgiyle yazilir: (1̄10). Iki basamakli indis varsa bosluk.
+function idxHTML(arr, open, close) {
+  const sep = arr.some((n) => Math.abs(n) > 9) ? ' ' : '';
+  const body = arr
+    .map((n) => (n < 0 ? `<span class="ob">${-n}</span>` : `${n}`))
+    .join(sep);
+  return `<span class="idx">${open}${body}${close}</span>`;
+}
+// 3B etiket icin ayni gosterim (scene.makeLabel parcalari)
+function idxParts(arr, open, close) {
+  const sep = arr.some((n) => Math.abs(n) > 9) ? ' ' : '';
+  const parts = [{ t: open }];
+  arr.forEach((n, i) => {
+    parts.push({ t: String(Math.abs(n)), bar: n < 0 });
+    if (sep && i < arr.length - 1) parts.push({ t: sep });
+  });
+  parts.push({ t: close });
+  return parts;
+}
+const reduce3 = (a) => {
+  const g = gcd(gcd(a[0], a[1]), a[2]) || 1;
+  return a.map((x) => x / g);
+};
+
+const isHex = () => state.current.system === 'hexagonal';
+const isCompound = () => state.current.category === 'compound';
 
 function stepper(label, id, value, ro = false) {
   if (ro) {
     return `<div class="stp ro"><span class="lbl">${label}</span>
-      <div class="strow"><input type="text" id="${id}" value="${value}" readonly></div></div>`;
+      <div class="strow"><output id="${id}" title="${t('derived')}">${value}</output></div></div>`;
   }
-  return `<div class="stp"><span class="lbl">${label}</span>
+  return `<div class="stp"><label class="lbl" for="${id}">${label}</label>
     <div class="strow">
-      <button class="sbtn" data-t="${id}" data-d="-1">−</button>
-      <input type="number" inputmode="numeric" pattern="-?[0-9]*" id="${id}" value="${value}">
-      <button class="sbtn" data-t="${id}" data-d="1">+</button>
+      <button class="sbtn" data-t="${id}" data-d="-1" aria-label="${label} −1">−</button>
+      <input type="text" inputmode="numeric" autocomplete="off" id="${id}" value="${value}">
+      <button class="sbtn" data-t="${id}" data-d="1" aria-label="${label} +1">+</button>
     </div></div>`;
 }
 
-// --- panel render ----------------------------------------------------------
+// --- panel -----------------------------------------------------------------
 function renderPanel() {
-  const hex = current.system === 'hexagonal';
-  const isCompound = current.category === 'compound';
+  const hex = isHex();
+  const comp = isCompound();
+  const cat = state.current.category;
+  const I = state.idx[state.current.system];
   const metalBtns = Object.values(STRUCTURES)
     .map((s) => `<button class="seg sbtn-st" data-st="${s.id}" title="${t('name_' + s.id)}">${t('abbr_' + s.id)}</button>`)
     .join('');
@@ -76,78 +122,79 @@ function renderPanel() {
     .map((s) => `<button class="seg sbtn-st" data-st="${s.id}" title="${t('name_' + s.id)}">${s.formula}</button>`)
     .join('');
 
+  const [ph, pk, pl] = I.p;
+  const [du, dv, dw] = I.d;
   const planeInputs = hex
-    ? stepper('h', 'p_h', 1) + stepper('k', 'p_k', 0) + stepper('i', 'p_i', -1, true) + stepper('l', 'p_l', 0)
-    : stepper('h', 'p_h', 1) + stepper('k', 'p_k', 0) + stepper('l', 'p_l', 0);
+    ? stepper('h', 'p_h', ph) + stepper('k', 'p_k', pk) + stepper('i', 'p_i', -(ph + pk), true) + stepper('l', 'p_l', pl)
+    : stepper('h', 'p_h', ph) + stepper('k', 'p_k', pk) + stepper('l', 'p_l', pl);
   const dirInputs = hex
-    ? stepper('u', 'd_u', 1) + stepper('v', 'd_v', 0) + stepper('t', 'd_t', -1, true) + stepper('w', 'd_w', 0)
-    : stepper('u', 'd_u', 1) + stepper('v', 'd_v', 1) + stepper('w', 'd_w', 0);
+    ? stepper('u', 'd_u', du) + stepper('v', 'd_v', dv) + stepper('t', 'd_t', -(du + dv), true) + stepper('w', 'd_w', dw)
+    : stepper('u', 'd_u', du) + stepper('v', 'd_v', dv) + stepper('w', 'd_w', dw);
 
-  let sections = `
+  let html = `
+    <div class="phead">
+      <div><h1>${t('title')}</h1><p class="sub">${t('subtitle')}</p></div>
+      <button id="closePanel" class="close-panel" aria-label="${t('close')}">✕</button>
+    </div>
     <section>
       <div class="catrow">
-        <button class="seg cat ${category === 'metal' ? 'active' : ''}" data-cat="metal">${t('cat_metal')}</button>
-        <button class="seg cat ${category === 'compound' ? 'active' : ''}" data-cat="compound">${t('cat_compound')}</button>
+        <button class="seg cat ${cat === 'metal' ? 'active' : ''}" data-cat="metal">${t('cat_metal')}</button>
+        <button class="seg cat ${cat === 'compound' ? 'active' : ''}" data-cat="compound">${t('cat_compound')}</button>
       </div>
       <h2>${t('sec_structure')}</h2>
-      <div id="structBtns" class="btnrow">${category === 'metal' ? metalBtns : compBtns}</div>
+      <div class="btnrow">${cat === 'metal' ? metalBtns : compBtns}</div>
       <div id="structInfo" class="info"></div>
     </section>
 
     <section>
       <h2>${t('sec_view')}</h2>
       <div class="btnrow">
-        <button data-mode="ball" class="seg active">${t('ballstick')}</button>
-        <button data-mode="space" class="seg">${t('spacefill')}</button>
+        <button data-mode="ball" class="seg ${state.mode === 'ball' ? 'active' : ''}">${t('ballstick')}</button>
+        <button data-mode="space" class="seg ${state.mode === 'space' ? 'active' : ''}">${t('spacefill')}</button>
       </div>
       <div class="toggles">
-        <label><input type="checkbox" id="tAtoms" checked> ${t('atoms')}</label>
-        <label><input type="checkbox" id="tAxes" checked> ${t('axes')}</label>
-        <label><input type="checkbox" id="tCell" checked> ${t('cell')}</label>
+        <label><input type="checkbox" data-vis="atoms" ${state.vis.atoms ? 'checked' : ''}> ${t('atoms')}</label>
+        <label><input type="checkbox" data-vis="axes" ${state.vis.axes ? 'checked' : ''}> ${t('axes')}</label>
+        <label><input type="checkbox" data-vis="cell" ${state.vis.cell ? 'checked' : ''}> ${t('cell')}</label>
       </div>
     </section>`;
 
-  if (isCompound) {
-    sections += `
+  if (comp) {
+    html += `
     <section>
       <h2>${t('sec_void')}</h2>
       <div id="voidInfo" class="voidbox"></div>
     </section>`;
   } else {
-    sections += `
+    html += `
     <section>
+      <h2>${t('sec_apf')}</h2>
       <button id="calcAPF" class="calc">${t('calcAPF')}</button>
       <div id="apfOut" class="out"></div>
     </section>`;
   }
 
-  sections += `
+  html += `
     <section>
-      <h2>${t('sec_plane')}</h2>
-      <div id="planeInputs" class="indices${hex ? ' hex' : ''}">${planeInputs}</div>
+      <h2>${hex ? t('sec_plane_hex') : t('sec_plane')}</h2>
+      <div class="indices${hex ? ' hex' : ''}" data-enter="drawPlane">${planeInputs}</div>
       <div class="btnrow">
         <button id="drawPlane" class="primary">${t('drawPlane')}</button>
         <button id="clearPlane">${t('clear')}</button>
       </div>
       <div id="planeOut" class="out"></div>
-      ${isCompound ? '' : `<button id="calcDAY" class="calc">${t('calcDAY')}</button><div id="dayOut" class="out"></div>`}
+      ${comp ? '' : `<button id="calcDAY" class="calc">${t('calcDAY')}</button><div id="dayOut" class="out"></div>`}
     </section>
 
     <section>
-      <h2>${t('sec_dir')}</h2>
-      <div id="dirInputs" class="indices${hex ? ' hex' : ''}">${dirInputs}</div>
+      <h2>${hex ? t('sec_dir_hex') : t('sec_dir')}</h2>
+      <div class="indices${hex ? ' hex' : ''}" data-enter="drawDir">${dirInputs}</div>
       <div class="btnrow">
         <button id="drawDir" class="primary">${t('drawDir')}</button>
         <button id="clearDir">${t('clear')}</button>
       </div>
       <div id="dirOut" class="out"></div>
-      ${isCompound ? '' : `<button id="calcLAY" class="calc">${t('calcLAY')}</button><div id="layOut" class="out"></div>`}
-    </section>
-
-    <section>
-      <h2>${t('contact')}</h2>
-      <p class="dim" style="margin:0 0 8px;font-size:13px">${t('contact_text')}</p>
-      <a class="contact-link" href="mailto:${CONTACT_EMAIL}">✉ ${CONTACT_EMAIL}</a>
+      ${comp ? '' : `<button id="calcLAY" class="calc">${t('calcLAY')}</button><div id="layOut" class="out"></div>`}
     </section>
 
     <section class="foot">
@@ -157,30 +204,37 @@ function renderPanel() {
         <p>${t('note_day')}</p>
         <p>${t('note_apf')}</p>
         <p>${t('note_neg')}</p>
+        <p>${t('note_view')}</p>
       </details>
     </section>`;
 
-  $('panel').innerHTML = `
-    <h1>${t('title')}</h1>
-    <p class="sub">${t('subtitle')}</p>
-    ${sections}`;
-
+  $('panel').innerHTML = html;
   $('resetBtn').textContent = '⟳ ' + t('resetView');
+  $('resetBtn').title = t('resetView');
+  $('menuBtn').setAttribute('aria-label', t('menu'));
+  $('gearBtn').setAttribute('aria-label', t('settings'));
+  $('gearBtn').title = t('settings');
   bindPanel();
   renderStructInfo();
-  if (isCompound) renderVoidInfo();
+  if (comp) renderVoidInfo();
   updateLegend();
+  // Cizili duzlem/dogrultu varsa aciklamalari yeniden yaz (dil degisimi)
+  if (state.plane) showPlane();
+  if (state.dir) showDir();
 }
 
 function renderStructInfo() {
-  const s = current;
+  const s = state.current;
   let rows;
   if (s.category === 'compound') {
+    const cat = s.species[s.cation];
+    const an = s.species[s.anion];
     rows = [
       [t('i_formula'), s.formula],
-      [t('i_system'), t('cubic')],
-      [t('i_coord'), s.coordination],
       [t('i_type'), t('type_' + s.id)],
+      [t('i_coord'), s.coordination],
+      [t('i_radii'), `${cat.label} ${cat.pm} · ${an.label} ${an.pm} pm`],
+      [t('i_ratio'), fmt(cat.pm / an.pm, 3)],
       [t('i_example'), t('ex_' + s.id)],
     ];
   } else {
@@ -189,10 +243,10 @@ function renderStructInfo() {
       [t('i_system'), s.system === 'cubic' ? t('cubic') : t('hexagonal')],
       [t('i_atoms_cell'), s.atomsPerCell],
       [t('i_coord'), s.coordination],
-      [t('i_apf'), s.apf.toFixed(4)],
-      [t('i_ar'), s.aOverR.toFixed(4) + '·r'],
+      [t('i_apf'), fmt(s.apf, 4)],
+      [t('i_a'), `a = ${fmt(s.aOverR, 4)}·r`],
     ];
-    if (s.cOverA) rows.push([t('i_ca'), s.cOverA.toFixed(3)]);
+    if (s.cOverA) rows.push([t('i_ca'), fmt(s.cOverA, 3)]);
     rows.push([t('i_example'), t('ex_' + s.id)]);
   }
   $('structInfo').innerHTML = rows
@@ -201,219 +255,314 @@ function renderStructInfo() {
 }
 
 function renderVoidInfo() {
-  const s = current;
+  const s = state.current;
   const general =
-    s.voidType === 'octahedral'
-      ? t('void_oct')
-      : s.voidType === 'cubic'
-      ? t('void_cubic')
-      : t('void_tet');
+    s.voidType === 'octahedral' ? t('void_oct') : s.voidType === 'cubic' ? t('void_cubic') : t('void_tet');
   $('voidInfo').innerHTML = `<p>${t('void_' + s.id)}</p><p class="dim">${general}</p>`;
 }
 
 function updateLegend() {
-  const s = current;
+  const s = state.current;
+  const hexCol = (c) => '#' + c.toString(16).padStart(6, '0');
   let items;
   if (s.category === 'compound') {
     items = [
-      ['#' + s.species.A.color.toString(16).padStart(6, '0'), s.species.A.label],
-      ['#' + s.species.B.color.toString(16).padStart(6, '0'), s.species.B.label],
-      ['#dfe6ee', t('cell')],
-      ['#ffc107', t('sec_plane').replace(' (hkl)', '')],
-      ['#9c27b0', t('sec_dir').replace(' [uvw]', '')],
+      [hexCol(s.species.A.color), s.species.A.label],
+      [hexCol(s.species.B.color), s.species.B.label],
     ];
   } else if (s.system === 'hexagonal') {
     items = [
-      ['#ff9800', 'a1·a2·a3'],
+      ['#ff9800', 'a₁ a₂ a₃'],
       ['#00bcd4', 'c'],
-      ['#dfe6ee', t('cell')],
-      ['#ffc107', t('sec_plane').replace(' (hkl)', '')],
-      ['#9c27b0', t('sec_dir').replace(' [uvw]', '')],
     ];
   } else {
     items = [
       ['#e53935', 'x'],
       ['#43a047', 'y'],
       ['#1e88e5', 'z'],
-      ['#dfe6ee', t('cell')],
-      ['#ffc107', t('sec_plane').replace(' (hkl)', '')],
-      ['#9c27b0', t('sec_dir').replace(' [uvw]', '')],
     ];
   }
+  items.push(['#dfe6ee', t('cell')], ['#ffc107', t('leg_plane')], ['#d05ce3', t('leg_dir')]);
   $('legend').innerHTML = items.map((i) => `<span><i style="background:${i[0]}"></i>${i[1]}</span>`).join('');
 }
 
 // --- okuma -----------------------------------------------------------------
+function readInt(id) {
+  const el = $(id);
+  const raw = String(el.value).replace(/[−–]/g, '-').trim();
+  let n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) n = 0;
+  n = Math.max(-IDX_MAX, Math.min(IDX_MAX, n));
+  if (String(n) !== el.value) el.value = n;
+  return n;
+}
 function readPlane() {
-  const h = +$('p_h').value || 0;
-  const k = +$('p_k').value || 0;
-  const l = +$('p_l').value || 0;
-  if (current.system === 'hexagonal') return { h, k, l, i: -(h + k) };
-  return { h, k, l };
+  const p = [readInt('p_h'), readInt('p_k'), readInt('p_l')];
+  state.idx[state.current.system].p = p;
+  return p;
 }
 function readDir() {
-  const u = +$('d_u').value || 0;
-  const v = +$('d_v').value || 0;
-  const w = +$('d_w').value || 0;
-  if (current.system === 'hexagonal') return { u, v, w, t: -(u + v) };
-  return { u, v, w };
+  const d = [readInt('d_u'), readInt('d_v'), readInt('d_w')];
+  state.idx[state.current.system].d = d;
+  return d;
 }
 
 // --- olay baglama ----------------------------------------------------------
 function bindPanel() {
-  // kategori
   document.querySelectorAll('[data-cat]').forEach((b) => {
     b.onclick = () => {
-      category = b.dataset.cat;
-      const first = category === 'metal' ? STRUCTURES.BK : COMPOUNDS.NaCl;
-      selectStructure(first);
+      if (b.dataset.cat === state.current.category) return;
+      selectStructure(b.dataset.cat === 'metal' ? STRUCTURES.BK : COMPOUNDS.NaCl);
     };
   });
-  // yapi
   document.querySelectorAll('.sbtn-st').forEach((b) => {
-    b.onclick = () => selectStructure(ALL_STRUCTURES[b.dataset.st]);
+    b.classList.toggle('active', b.dataset.st === state.current.id);
+    b.onclick = () => {
+      selectStructure(ALL_STRUCTURES[b.dataset.st]);
+      closePanelMobile();
+    };
   });
-  [...document.querySelectorAll('.sbtn-st')].forEach((b) =>
-    b.classList.toggle('active', b.dataset.st === current.id)
-  );
 
-  // stepper + / -
+  // stepper + / −
   document.querySelectorAll('.sbtn').forEach((b) => {
     b.onclick = () => {
       const inp = $(b.dataset.t);
-      let val = (parseInt(inp.value, 10) || 0) + parseInt(b.dataset.d, 10);
-      if (val > 6) val = 6;
-      if (val < -6) val = -6;
+      let val = readInt(b.dataset.t) + parseInt(b.dataset.d, 10);
+      val = Math.max(-IDX_MAX, Math.min(IDX_MAX, val));
       inp.value = val;
       inp.dispatchEvent(new Event('input'));
     };
   });
-  // HCP turetilen indis senkronu
-  if (current.system === 'hexagonal') {
-    const syncP = () => ($('p_i').value = -((+$('p_h').value || 0) + (+$('p_k').value || 0)));
-    const syncD = () => ($('d_t').value = -((+$('d_u').value || 0) + (+$('d_v').value || 0)));
-    $('p_h').oninput = syncP;
-    $('p_k').oninput = syncP;
-    $('d_u').oninput = syncD;
-    $('d_v').oninput = syncD;
+  // HSP: i = −(h+k), t = −(u+v)
+  if (isHex()) {
+    const num = (id) => parseInt(String($(id).value).replace(/[−–]/g, '-'), 10) || 0;
+    const syncP = () => ($('p_i').value = -(num('p_h') + num('p_k')));
+    const syncD = () => ($('d_t').value = -(num('d_u') + num('d_v')));
+    ['p_h', 'p_k'].forEach((id) => $(id).addEventListener('input', syncP));
+    ['d_u', 'd_v'].forEach((id) => $(id).addEventListener('input', syncD));
   }
+  // Enter -> ciz
+  document.querySelectorAll('[data-enter] input').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $(inp.closest('[data-enter]').dataset.enter).click();
+    });
+    inp.addEventListener('focus', () => inp.select());
+  });
 
-  // gorunum
   document.querySelectorAll('[data-mode]').forEach((b) => {
     b.onclick = () => {
-      document.querySelectorAll('[data-mode]').forEach((x) => x.classList.remove('active'));
-      b.classList.add('active');
-      scene.setAtomMode(b.dataset.mode);
+      state.mode = b.dataset.mode;
+      document.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('active', x === b));
+      scene.setAtomMode(state.mode);
     };
   });
-  $('tAtoms').onchange = (e) => (scene.groups.atoms.visible = e.target.checked);
-  $('tAxes').onchange = (e) => (scene.groups.axes.visible = e.target.checked);
-  $('tCell').onchange = (e) => (scene.groups.cell.visible = e.target.checked);
+  document.querySelectorAll('[data-vis]').forEach((cb) => {
+    cb.onchange = () => {
+      state.vis[cb.dataset.vis] = cb.checked;
+      applyVisibility();
+    };
+  });
 
-  // duzlem
-  $('drawPlane').onclick = onDrawPlane;
+  $('drawPlane').onclick = () => drawPlane();
   $('clearPlane').onclick = () => {
     scene.clearPlane();
+    state.plane = null;
     $('planeOut').innerHTML = '';
     if ($('dayOut')) $('dayOut').innerHTML = '';
   };
-  // dogrultu
-  $('drawDir').onclick = onDrawDir;
+  $('drawDir').onclick = () => drawDir();
   $('clearDir').onclick = () => {
     scene.clearDirection();
+    state.dir = null;
     $('dirOut').innerHTML = '';
     if ($('layOut')) $('layOut').innerHTML = '';
   };
   if ($('calcLAY')) $('calcLAY').onclick = onCalcLAY;
   if ($('calcDAY')) $('calcDAY').onclick = onCalcDAY;
   if ($('calcAPF')) $('calcAPF').onclick = onCalcAPF;
+  $('closePanel').onclick = closePanelMobile;
 }
 
-function onDrawPlane() {
-  const p = readPlane();
-  if (!p.h && !p.k && !p.l) return ($('planeOut').innerHTML = `<i>${t('err_zero')}</i>`);
-  const res = current.system === 'hexagonal' ? hexPlanePolygon(current, p.h, p.k, p.l) : cubicPlanePolygon(p.h, p.k, p.l);
+function applyVisibility() {
+  scene.groups.atoms.visible = state.vis.atoms;
+  scene.groups.bonds.visible = state.vis.atoms;
+  scene.groups.axes.visible = state.vis.axes;
+  scene.groups.cell.visible = state.vis.cell;
+}
+
+// --- duzlem ----------------------------------------------------------------
+function drawPlane() {
+  const hkl = readPlane();
+  if (hkl.every((x) => x === 0)) {
+    $('planeOut').innerHTML = `<i>${t('err_zero')}</i>`;
+    return null;
+  }
+  const res = isHex() ? hexPlanePolygon(state.current, ...hkl) : cubicPlanePolygon(...hkl);
   scene.setPlane(res.poly);
-  lastPlane = p;
-  const label = current.system === 'hexagonal' ? planeStr([p.h, p.k, p.i, p.l]) : planeStr([p.h, p.k, p.l]);
-  let txt = t('drawn_plane', { x: `<b>${label}</b>` });
-  if (current.system === 'cubic') {
-    const s2 = p.h * p.h + p.k * p.k + p.l * p.l;
-    const aR = current.aOverR || 2;
-    txt += `<br>${t('dspacing', { a: (1 / Math.sqrt(s2)).toFixed(3), r: (aR / Math.sqrt(s2)).toFixed(3) })}`;
-    if (res.shift && (res.shift.x || res.shift.y || res.shift.z)) {
-      txt += `<br><i>${t('origin_shift', { x: res.shift.x, y: res.shift.y, z: res.shift.z })}</i>`;
-    }
+  state.plane = { hkl, res };
+  if ($('dayOut')) $('dayOut').innerHTML = '';
+  showPlane();
+  return state.plane;
+}
+
+function showPlane() {
+  const { hkl, res } = state.plane;
+  const [h, k, l] = hkl;
+  const hex = isHex();
+  const label = hex ? idxHTML([h, k, -(h + k), l], '(', ')') : idxHTML(hkl, '(', ')');
+  let txt = t('drawn_plane', { x: label });
+  if (!res.poly.length) txt += `<br><i>${t('err_plane_out')}</i>`;
+
+  // d = 1/|n| (a birimi); n = h·b1 + k·b2 + l·b3
+  const d = 1 / planeNormal(state.current, h, k, l).length();
+  const formula = hex ? t('dspacing_hex') : t('dspacing_cubic');
+  const inR = !isCompound() ? ` = ${fmt(d * state.current.aOverR)}·r` : '';
+  txt += `<div class="kv"><span>${formula}</span><b>d = ${fmt(d)}·a${inR}</b></div>`;
+
+  const sh = res.shift;
+  if (!hex && (sh.x || sh.y || sh.z)) {
+    txt += `<i>${t('origin_shift', { x: sh.x, y: sh.y, z: sh.z })}</i>`;
+  } else if (hex && res.shifted) {
+    txt += `<i>${t('origin_shift_hex')}</i>`;
   }
   $('planeOut').innerHTML = txt;
 }
 
-function onDrawDir() {
-  const d = readDir();
-  if (!d.u && !d.v && !d.w) return ($('dirOut').innerHTML = `<i>${t('err_zero')}</i>`);
-  const r = current.system === 'hexagonal' ? hcpDirection(current, d.u, d.v, d.t, d.w) : cubicDirection(d.u, d.v, d.w);
-  const label = current.system === 'hexagonal' ? dirStr([d.u, d.v, d.t, d.w]) : dirStr([d.u, d.v, d.w]);
-  scene.setDirection(r.start, r.end, label);
-  lastDir = d;
-  let txt = t('drawn_dir', { x: `<b>${label}</b>` });
-  if (current.system === 'hexagonal') txt += `<br>${t('hcp3', { x: dirStr([r.U, r.V, r.W]) })}`;
+// --- dogrultu --------------------------------------------------------------
+function drawDir() {
+  const uvw = readDir();
+  if (uvw.every((x) => x === 0)) {
+    $('dirOut').innerHTML = `<i>${t('err_zero')}</i>`;
+    return null;
+  }
+  const hex = isHex();
+  const [u, v, w] = uvw;
+  const res = hex ? hcpDirection(state.current, u, v, -(u + v), w) : cubicDirection(u, v, w);
+  const arr = hex ? [u, v, -(u + v), w] : uvw;
+  scene.setDirection(res.start, res.end, idxParts(arr, '[', ']'));
+  state.dir = { uvw, res };
+  if ($('layOut')) $('layOut').innerHTML = '';
+  showDir();
+  return state.dir;
+}
+
+function showDir() {
+  const { uvw, res } = state.dir;
+  const [u, v, w] = uvw;
+  const hex = isHex();
+  const arr = hex ? [u, v, -(u + v), w] : uvw;
+  let txt = t('drawn_dir', { x: idxHTML(arr, '[', ']') });
+  if (hex) {
+    const r3 = reduce3([res.U, res.V, res.W]);
+    txt += `<div class="kv"><span>${t('hcp3_rule')}</span><b>${idxHTML(r3, '[', ']')}</b></div>`;
+  }
+  const s = res.start;
+  if (!hex && (s.x || s.y || s.z)) txt += `<i>${t('origin_shift', { x: s.x, y: s.y, z: s.z })}</i>`;
   $('dirOut').innerHTML = txt;
 }
 
+// --- hesaplar --------------------------------------------------------------
+function resultBox(formula, rows, note) {
+  return `<div class="result">
+    <div class="formula">${formula}</div>
+    ${rows.map((r) => `<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}
+    ${note ? `<small>${note}</small>` : ''}</div>`;
+}
+
 function onCalcLAY() {
-  if (!lastDir) return ($('layOut').innerHTML = `<i>${t('err_no_dir')}</i>`);
-  const vec = current.system === 'hexagonal'
-    ? hcpDirection(current, lastDir.u, lastDir.v, lastDir.t, lastDir.w).vec
-    : cubicDirection(lastDir.u, lastDir.v, lastDir.w).vec;
-  const r = computeLAY(current, vec);
+  const d = drawDir();
+  if (!d) {
+    $('layOut').innerHTML = '';
+    return;
+  }
+  const s = state.current;
+  const uvw = isHex() ? [d.res.U, d.res.V, d.res.W] : d.uvw;
+  const r = computeLAY(s, uvw);
   if (!r) return ($('layOut').innerHTML = `<i>${t('err_no_line')}</i>`);
-  $('layOut').innerHTML = `<div class="result">
-      <div><span>${t('r_spacing')}</span><b>${fmt(r.spacing_a)}·a = ${fmt(r.spacing_R)}·r</b></div>
-      <div><span>${t('r_lay')}</span><b>${fmt(r.LAY_per_a)} /a</b></div>
-      <div><span>${t('r_lay_r')}</span><b>${fmt(r.LAY_per_R)} /r</b></div>
-      <small>${t('lay_def')}</small></div>`;
+  $('layOut').innerHTML = resultBox(
+    t('lay_formula'),
+    [
+      [t('r_n_line'), r.n],
+      [t('r_len'), `${fmt(r.len_a)}·a = ${fmt(r.len_R)}·r`],
+      [t('r_lay'), `${fmt(r.LAY_per_a)} /a`],
+      [t('r_lay_r'), `<span class="hl">${fmt(r.LAY_per_R)} /r</span>`],
+    ],
+    t('lay_def')
+  );
 }
 
 function onCalcDAY() {
-  if (!lastPlane) return ($('dayOut').innerHTML = `<i>${t('err_no_plane')}</i>`);
-  const n = planeNormal(current, lastPlane.h, lastPlane.k, lastPlane.l);
-  const r = computeDAY(current, n);
+  const p = drawPlane();
+  if (!p) {
+    $('dayOut').innerHTML = '';
+    return;
+  }
+  const r = computeDAY(state.current, p.hkl, p.res.m);
   if (!r) return ($('dayOut').innerHTML = `<i>${t('err_no_plane_lat')}</i>`);
-  $('dayOut').innerHTML = `<div class="result">
-      <div><span>${t('r_area')}</span><b>${fmt(r.area_a2)}·a² = ${fmt(r.area_R2)}·r²</b></div>
-      <div><span>${t('r_day')}</span><b>${fmt(r.DAY_per_a2)} /a²</b></div>
-      <div><span>${t('r_day_r')}</span><b>${fmt(r.DAY_per_R2)} /r²</b></div>
-      <small>${t('day_def')}</small></div>`;
+  const rows = [
+    [t('r_n_plane'), r.n],
+    [t('r_area'), `${fmt(r.area_a2)}·a² = ${fmt(r.area_R2)}·r²`],
+    [t('r_day'), `${fmt(r.DAY_per_a2)} /a²`],
+    [t('r_day_r'), `<span class="hl">${fmt(r.DAY_per_R2)} /r²</span>`],
+  ];
+  $('dayOut').innerHTML = resultBox(t('day_formula'), rows, r.n === 0 ? t('day_empty') : t('day_def'));
 }
 
 function onCalcAPF() {
-  const s = current;
-  const pct = (s.apf * 100).toFixed(2);
-  $('apfOut').innerHTML = `<div class="result">
-      <div class="formula">${t('apf_formula')}</div>
-      <div><span>${t('apf_n')}</span><b>${s.atomsPerCell}</b></div>
-      <div><span>a / r</span><b>${s.aOverR.toFixed(4)}</b></div>
-      <div><span>${t('apf_val')}</span><b>${s.apf.toFixed(4)}</b></div>
-      <div><span>${t('apf_pct')}</span><b>% ${pct}</b></div></div>`;
+  const s = state.current;
+  const n = s.atomsPerCell;
+  const k = s.aOverR; // a = k·r
+  const vAtoms = n * (4 / 3) * Math.PI; // r³ cinsinden
+  let vCell;
+  let cellRow;
+  if (s.system === 'hexagonal') {
+    vCell = ((3 * Math.sqrt(3)) / 2) * k * k * (s.cOverA * k);
+    cellRow = [t('apf_vcell_hex'), `${fmt(vCell)}·r³`];
+  } else {
+    vCell = k ** 3;
+    cellRow = [`V<sub>${t('cell_sub')}</sub> = a³ = (${fmt(k, 3)}·r)³`, `${fmt(vCell)}·r³`];
+  }
+  $('apfOut').innerHTML = resultBox(
+    t('apf_formula'),
+    [
+      [t('apf_n'), n],
+      [t('i_a'), `a = ${fmt(k, 4)}·r`],
+      [t('apf_vatoms', { n }), `${fmt(vAtoms)}·r³`],
+      cellRow,
+      [t('apf_val'), `<span class="hl">${fmt(vAtoms / vCell, 4)}</span> (${pct(vAtoms / vCell)})`],
+    ],
+    t('apf_def')
+  );
 }
 
 // --- yapi secimi -----------------------------------------------------------
 function selectStructure(s) {
-  current = s;
-  category = s.category;
+  state.current = s;
   scene.setStructure(s);
+  scene.setAtomMode(state.mode);
   scene.clearPlane();
   scene.clearDirection();
-  lastPlane = null;
-  lastDir = null;
+  state.plane = null;
+  state.dir = null;
+  applyVisibility();
   renderPanel();
 }
 
-// --- ayarlar modal ---------------------------------------------------------
+// --- mobil panel -----------------------------------------------------------
+function openPanel() {
+  $('panel').classList.add('open');
+  $('scrim').classList.add('show');
+}
+function closePanelMobile() {
+  $('panel').classList.remove('open');
+  $('scrim').classList.remove('show');
+}
+
+// --- ayarlar ---------------------------------------------------------------
 function renderSettings() {
   $('settings').innerHTML = `
     <div class="modal-card">
-      <div class="modal-head"><h2>${t('settings')}</h2><button id="closeSet">✕</button></div>
+      <div class="modal-head"><h2>${t('settings')}</h2><button id="closeSet" aria-label="${t('close')}">✕</button></div>
       <div class="set-sec">
         <h3>${t('language')}</h3>
         <div class="btnrow">
@@ -424,7 +573,7 @@ function renderSettings() {
       <div class="set-sec">
         <h3>${t('contact')}</h3>
         <p>${t('contact_text')}</p>
-        <a class="contact-link" href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>
+        <a class="contact-link" href="mailto:${CONTACT_EMAIL}">✉ ${CONTACT_EMAIL}</a>
       </div>
       <div class="set-sec">
         <h3>${t('about')}</h3>
@@ -435,23 +584,38 @@ function renderSettings() {
   document.querySelectorAll('[data-lang]').forEach((b) => {
     b.onclick = () => {
       setLang(b.dataset.lang);
+      applyDocLang();
       renderPanel();
       renderSettings();
     };
   });
-  $('closeSet').onclick = $('closeSet2').onclick = () => $('settings').classList.add('hidden');
+  $('closeSet').onclick = $('closeSet2').onclick = closeSettings;
+}
+function closeSettings() {
+  $('settings').classList.add('hidden');
+}
+function applyDocLang() {
+  document.documentElement.lang = getLang();
+  document.title = t('doc_title');
 }
 
 $('gearBtn').onclick = () => {
   renderSettings();
   $('settings').classList.remove('hidden');
+  $('closeSet2').focus();
 };
 $('settings').onclick = (e) => {
-  if (e.target.id === 'settings') $('settings').classList.add('hidden');
+  if (e.target.id === 'settings') closeSettings();
 };
-$('menuBtn').onclick = () => $('panel').classList.toggle('open');
+$('menuBtn').onclick = () => ($('panel').classList.contains('open') ? closePanelMobile() : openPanel());
+$('scrim').onclick = closePanelMobile;
 $('resetBtn').onclick = () => scene.resetView();
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeSettings();
+  closePanelMobile();
+});
 
 // --- baslat ----------------------------------------------------------------
+applyDocLang();
 selectStructure(STRUCTURES.BK);
-setTimeout(() => scene.resize(), 50);
