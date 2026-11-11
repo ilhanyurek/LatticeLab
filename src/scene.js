@@ -5,20 +5,44 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { HCP_C_OVER_A } from './crystals.js';
 
-function makeLabel(text, color) {
+// Etiket metni: '-2' gibi negatif sayilar ust cizgiyle (2̄) cizilir.
+// text: duz metin ya da [{t, bar}] parcalari.
+function makeLabel(text, color, height = 0.2) {
+  const parts = Array.isArray(text) ? text : [{ t: String(text), bar: false }];
+  const fs = 44;
+  const font = `bold ${fs}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const meas = document.createElement('canvas').getContext('2d');
+  meas.font = font;
+  const widths = parts.map((p) => meas.measureText(p.t).width);
+  const pad = 10;
+  const W = Math.ceil(widths.reduce((x, y) => x + y, 0) + pad * 2);
+  const H = 72;
   const cv = document.createElement('canvas');
-  cv.width = 128;
-  cv.height = 64;
+  cv.width = W;
+  cv.height = H;
   const ctx = cv.getContext('2d');
-  ctx.fillStyle = color;
-  ctx.font = 'bold 40px sans-serif';
-  ctx.textAlign = 'center';
+  ctx.font = font;
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, 64, 32);
+  ctx.lineJoin = 'round';
+  let x = pad;
+  parts.forEach((p, i) => {
+    // koyu kontur: her arka planda okunur
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = 'rgba(10,14,20,.85)';
+    ctx.strokeText(p.t, x, H / 2 + 4);
+    ctx.fillStyle = color;
+    ctx.fillText(p.t, x, H / 2 + 4);
+    if (p.bar) {
+      ctx.fillRect(x + 2, 8, widths[i] - 4, 4);
+    }
+    x += widths[i];
+  });
   const tex = new THREE.CanvasTexture(cv);
   tex.minFilter = THREE.LinearFilter;
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-  spr.scale.set(0.4, 0.2, 1);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  spr.scale.set((height * W) / H, height, 1);
+  spr.renderOrder = 10;
   return spr;
 }
 
@@ -28,9 +52,13 @@ export class CrystalScene {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
-    this.camera.position.set(2.6, 2.0, 3.2);
+    this.camera = new THREE.PerspectiveCamera(40, 1, 0.01, 100);
+    // Ders kitabi duzeni: z (ve HSP'de c) yukari. OrbitControls 'up' vektorunu
+    // olusturulurken okudugu icin once ayarlanir.
+    this.camera.up.set(0, 0, 1);
     this.controls = new OrbitControls(this.camera, canvas);
+    this.controls.minDistance = 1.5;
+    this.controls.maxDistance = 20;
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
 
@@ -56,18 +84,27 @@ export class CrystalScene {
 
     this.structure = null;
     this.atomMode = 'ball'; // 'ball' | 'space'
+    this.groups.bonds = new THREE.Group();
+    this.root.add(this.groups.bonds);
     this._loop = this._loop.bind(this);
     this._loop();
     window.addEventListener('resize', () => this.resize());
+    if (window.ResizeObserver) new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
   }
 
   resize() {
     const w = this.canvas.clientWidth || this.canvas.parentElement.clientWidth;
     const h = this.canvas.clientHeight || this.canvas.parentElement.clientHeight;
+    if (!w || !h) return;
+    if (w === this._w && h === this._h) return;
+    const first = !this._w;
+    this._w = w;
+    this._h = h;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (first && this.structure) this.resetView();
   }
 
   _loop() {
@@ -92,19 +129,15 @@ export class CrystalScene {
     this._buildAtoms();
     this._buildAxes();
     this._center();
+    this.resetView();
   }
 
+  // Model koordinatlari dogrudan kullanilir (z yukari); yalnizca ortalanir.
   _center() {
     const s = this.structure;
-    if (s.system === 'cubic') {
-      this.root.rotation.set(0, 0, 0);
-      this.root.position.set(-0.5, -0.5, -0.5);
-    } else {
-      // Modelde c ekseni +Z; sahnede "yukari" +Y oldugu icin prizmayi
-      // X ekseni etrafinda -90° dondurup c'yi dikey yapariz (standart gorunum).
-      this.root.rotation.set(-Math.PI / 2, 0, 0);
-      this.root.position.set(0, -HCP_C_OVER_A / 2, 0);
-    }
+    this.root.rotation.set(0, 0, 0);
+    if (s.system === 'cubic') this.root.position.set(-0.5, -0.5, -0.5);
+    else this.root.position.set(0, 0, -HCP_C_OVER_A / 2);
   }
 
   _cubeCorners() {
@@ -117,7 +150,7 @@ export class CrystalScene {
 
   _buildCell() {
     this._clear(this.groups.cell);
-    const mat = new THREE.LineBasicMaterial({ color: 0xdfe6ee });
+    const mat = new THREE.LineBasicMaterial({ color: 0xdfe6ee, transparent: true, opacity: 0.85 });
     const s = this.structure;
     const segs = [];
     if (s.system === 'cubic') {
@@ -163,23 +196,53 @@ export class CrystalScene {
         // bilesik: iyon turune gore renk ve yaricap
         const sp = s.species[a.sp];
         color = sp.color;
-        r = space ? sp.r : sp.r * 0.62;
+        r = space ? sp.r : Math.max(0.07, sp.r * 0.45);
       } else {
         color = colors[a.kind] || 0x4f8cff;
-        r = space ? s.touchRadius : 0.16;
+        r = space ? s.touchRadius : 0.12;
       }
       const geo = new THREE.SphereGeometry(r, 28, 20);
       const mat = new THREE.MeshStandardMaterial({
         color,
         roughness: 0.45,
         metalness: 0.1,
-        transparent: space,
-        opacity: space ? 0.92 : 1,
       });
       const m = new THREE.Mesh(geo, mat);
       m.position.set(a.pos[0], a.pos[1], a.pos[2]);
+      m.userData.pos = m.position.clone();
       this.groups.atoms.add(m);
     });
+    this._buildBonds();
+    this._applyHighlight();
+  }
+
+  // Top-cubuk gorunumunde en yakin komsular arasina cubuk cizilir.
+  // Bilesiklerde yalnizca katyon-anyon baglari.
+  _buildBonds() {
+    this._clear(this.groups.bonds);
+    if (this.atomMode !== 'ball') return;
+    const s = this.structure;
+    const P = s.atoms.map((a) => ({ v: new THREE.Vector3(...a.pos), sp: a.sp }));
+    const pairs = [];
+    let dmin = Infinity;
+    for (let i = 0; i < P.length; i++)
+      for (let j = i + 1; j < P.length; j++) {
+        if (s.species && P[i].sp === P[j].sp) continue;
+        const d = P[i].v.distanceTo(P[j].v);
+        pairs.push([i, j, d]);
+        if (d < dmin) dmin = d;
+      }
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8a97a8, roughness: 0.6 });
+    const up = new THREE.Vector3(0, 1, 0);
+    for (const [i, j, d] of pairs) {
+      if (d > dmin * 1.02) continue;
+      const geo = new THREE.CylinderGeometry(0.018, 0.018, d, 8, 1, true);
+      const m = new THREE.Mesh(geo, mat);
+      const dir = new THREE.Vector3().subVectors(P[j].v, P[i].v).normalize();
+      m.quaternion.setFromUnitVectors(up, dir);
+      m.position.addVectors(P[i].v, P[j].v).multiplyScalar(0.5);
+      this.groups.bonds.add(m);
+    }
   }
 
   _arrow(from, to, color, label, labelColor) {
@@ -188,8 +251,8 @@ export class CrystalScene {
     const arrow = new THREE.ArrowHelper(dir.clone().normalize(), from, len, color, 0.12, 0.07);
     this.groups.axes.add(arrow);
     if (label) {
-      const lab = makeLabel(label, labelColor || '#222');
-      lab.position.copy(to).addScaledVector(dir.clone().normalize(), 0.12);
+      const lab = makeLabel(label, labelColor || '#e6edf3');
+      lab.position.copy(to).addScaledVector(dir.clone().normalize(), 0.14);
       this.groups.axes.add(lab);
     }
   }
@@ -200,11 +263,11 @@ export class CrystalScene {
     const s = this.structure;
     if (s.system === 'cubic') {
       const o = new THREE.Vector3(0, 0, 0);
-      this._arrow(o, new THREE.Vector3(1.35, 0, 0), 0xe53935, 'x', '#e53935');
-      this._arrow(o, new THREE.Vector3(0, 1.35, 0), 0x43a047, 'y', '#43a047');
-      this._arrow(o, new THREE.Vector3(0, 0, 1.35), 0x1e88e5, 'z', '#1e88e5');
-      const ol = makeLabel('0', '#555');
-      ol.position.set(-0.12, -0.12, -0.12);
+      this._arrow(o, new THREE.Vector3(1.35, 0, 0), 0xe53935, 'x', '#ff6b66');
+      this._arrow(o, new THREE.Vector3(0, 1.35, 0), 0x43a047, 'y', '#66d26b');
+      this._arrow(o, new THREE.Vector3(0, 0, 1.35), 0x1e88e5, 'z', '#5aaaf5');
+      const ol = makeLabel('O', '#c9d4e0', 0.16);
+      ol.position.set(-0.1, -0.1, -0.1);
       this.groups.axes.add(ol);
     } else {
       const c = HCP_C_OVER_A;
@@ -214,9 +277,9 @@ export class CrystalScene {
       for (let i = 0; i < 3; i++) {
         const ang = (Math.PI * 2 / 3) * i; // 120 derece
         const v = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0).multiplyScalar(1.35);
-        this._arrow(o, v, aCol, 'a' + (i + 1), '#ef6c00');
+        this._arrow(o, v, aCol, 'a' + (i + 1), '#ffb74d');
       }
-      this._arrow(o, new THREE.Vector3(0, 0, c + 0.35), 0x00bcd4, 'c', '#0097a7');
+      this._arrow(o, new THREE.Vector3(0, 0, c + 0.35), 0x00bcd4, 'c', '#4dd0e1');
     }
   }
 
@@ -225,66 +288,131 @@ export class CrystalScene {
     if (this.structure) this._buildAtoms();
   }
 
-  // --- Duzlem --------------------------------------------------------------
-  setPlane(polygon) {
+  // --- Duzlem(ler) ---------------------------------------------------------
+  // planes: [{ poly, color }] — tek duzlem ya da bir {hkl} ailesi
+  setPlanes(planes) {
     this._clear(this.groups.plane);
-    if (!polygon || polygon.length < 3) return;
-    const centroid = new THREE.Vector3();
-    polygon.forEach((p) => centroid.add(p));
-    centroid.multiplyScalar(1 / polygon.length);
-    const verts = [];
-    for (let i = 0; i < polygon.length; i++) {
-      const a = polygon[i];
-      const b = polygon[(i + 1) % polygon.length];
-      verts.push(centroid.x, centroid.y, centroid.z, a.x, a.y, a.z, b.x, b.y, b.z);
+    const many = planes.length > 1;
+    for (const { poly, color = 0xffc107 } of planes) {
+      if (!poly || poly.length < 3) continue;
+      const centroid = new THREE.Vector3();
+      poly.forEach((p) => centroid.add(p));
+      centroid.multiplyScalar(1 / poly.length);
+      const verts = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i];
+        const b = poly[(i + 1) % poly.length];
+        verts.push(centroid.x, centroid.y, centroid.z, a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: many ? 0.3 : 0.5,
+        roughness: 0.6,
+        depthWrite: false, // atomlar duzlemin arkasinda da gorunsun
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = 2;
+      this.groups.plane.add(mesh);
+      const outline = new THREE.BufferGeometry().setFromPoints([...poly, poly[0]]);
+      const line = new THREE.Line(outline, new THREE.LineBasicMaterial({ color: many ? color : 0xff6f00 }));
+      this.groups.plane.add(line);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xffc107,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.5,
-      roughness: 0.6,
-    });
-    this.groups.plane.add(new THREE.Mesh(geo, mat));
-    const outline = new THREE.BufferGeometry().setFromPoints([...polygon, polygon[0]]);
-    this.groups.plane.add(
-      new THREE.Line(outline, new THREE.LineBasicMaterial({ color: 0xff6f00, linewidth: 2 }))
-    );
+  }
+
+  setPlane(polygon) {
+    this.setPlanes([{ poly: polygon }]);
   }
 
   clearPlane() {
     this._clear(this.groups.plane);
   }
 
-  // --- Dogrultu ------------------------------------------------------------
-  setDirection(start, end, label) {
+  // --- Dogrultu(lar) -------------------------------------------------------
+  // dirs: [{ start, end, label, color, labelColor }]
+  setDirections(dirs) {
     this._clear(this.groups.direction);
-    const dir = new THREE.Vector3().subVectors(end, start);
-    const arrow = new THREE.ArrowHelper(
-      dir.clone().normalize(),
-      start,
-      dir.length(),
-      0x9c27b0,
-      0.14,
-      0.08
-    );
-    this.groups.direction.add(arrow);
-    if (label) {
-      const lab = makeLabel(label, '#7b1fa2');
-      lab.position.copy(end).addScaledVector(dir.clone().normalize(), 0.14);
-      this.groups.direction.add(lab);
+    const many = dirs.length > 1;
+    for (const d of dirs) {
+      const v = new THREE.Vector3().subVectors(d.end, d.start);
+      const len = v.length();
+      if (len < 1e-9) continue;
+      const u = v.clone().normalize();
+      const arrow = new THREE.ArrowHelper(u, d.start, len, d.color ?? 0xd05ce3, many ? 0.11 : 0.14, many ? 0.06 : 0.08);
+      arrow.line.material.depthTest = false;
+      arrow.cone.material.depthTest = false;
+      arrow.renderOrder = 5;
+      this.groups.direction.add(arrow);
+      if (d.label) {
+        const lab = makeLabel(d.label, d.labelColor || '#e1a6ee', many ? 0.14 : 0.2);
+        lab.position.copy(d.end).addScaledVector(u, many ? 0.1 : 0.14);
+        this.groups.direction.add(lab);
+      }
     }
+  }
+
+  setDirection(start, end, label) {
+    this.setDirections([{ start, end, label }]);
   }
 
   clearDirection() {
     this._clear(this.groups.direction);
   }
 
+  // --- Vurgulama -----------------------------------------------------------
+  // fn(pos: Vector3) -> { plane: bool, dir: bool }; null -> vurgulama yok.
+  // Duzlem uzerindeki atomlar sari, dogrultu uzerindekiler mor parlar;
+  // digerleri soluklasir.
+  setHighlight(fn) {
+    this.highlight = fn;
+    this._applyHighlight();
+  }
+
+  _applyHighlight() {
+    const fn = this.highlight;
+    const meshes = this.groups.atoms.children;
+    const flags = meshes.map((m) => (fn ? fn(m.userData.pos) : { plane: false, dir: false }));
+    const any = flags.some((f) => f.plane || f.dir);
+    meshes.forEach((m, i) => {
+      const f = flags[i];
+      const mat = m.material;
+      const on = f.plane || f.dir;
+      if (m.userData.baseColor === undefined) m.userData.baseColor = mat.color.getHex();
+      const hc = f.plane && f.dir ? 0xffffff : f.plane ? 0xffc107 : f.dir ? 0xd05ce3 : null;
+      mat.color.setHex(hc ?? m.userData.baseColor);
+      mat.emissive.setHex(hc ?? 0x000000);
+      mat.emissiveIntensity = on ? 0.35 : 0;
+      const dim = any && !on;
+      mat.transparent = dim;
+      mat.opacity = dim ? 0.22 : 1;
+      mat.depthWrite = !dim;
+      mat.needsUpdate = true;
+      m.scale.setScalar(on && this.atomMode === 'ball' ? 1.3 : 1);
+    });
+    for (const b of this.groups.bonds.children) {
+      b.material.transparent = any;
+      b.material.opacity = any ? 0.25 : 1;
+    }
+    this.highlightCount = flags.reduce(
+      (acc, f) => ({ plane: acc.plane + (f.plane ? 1 : 0), dir: acc.dir + (f.dir ? 1 : 0) }),
+      { plane: 0, dir: 0 }
+    );
+  }
+
+  // Kamerayi yapiyi (eksenler dahil) ekrana sigacak uzakliga getirir.
+  // Gorus acisi: x izleyiciye dogru-sola, y saga, z yukari (ders kitabi).
   resetView() {
-    this.camera.position.set(2.6, 2.0, 3.2);
+    const hex = this.structure && this.structure.system === 'hexagonal';
+    const R = hex ? 1.75 : 1.3; // sinir kuresi yaricapi (eksen uclari dahil)
+    const vfov = THREE.MathUtils.degToRad(this.camera.fov);
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * (this.camera.aspect || 1));
+    const dist = (R / Math.sin(Math.min(vfov, hfov) / 2)) * 1.05;
+    const dir = new THREE.Vector3(3.6, 1.25, 1.7).normalize();
+    this.camera.position.copy(dir.multiplyScalar(dist));
     this.controls.target.set(0, 0, 0);
     this.controls.update();
   }

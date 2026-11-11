@@ -131,21 +131,50 @@ export function cubicPlanePolygon(h, k, l) {
   const s = new THREE.Vector3(h < 0 ? 1 : 0, k < 0 ? 1 : 0, l < 0 ? 1 : 0);
   const d = 1 + n.dot(s);
   const poly = clipPlaneToCell(n, d, cubeHalfspaces());
-  return { poly, shift: s, normal: n };
+  return { poly, shift: s, normal: n, m: d };
 }
 
-// HSP duzlemi: normal ters kafesten, n.x = 1, prizmaya kirp
+// Poligon alani (gecersiz/dejenere kirpmayi elemek icin)
+function polyArea(poly) {
+  if (poly.length < 3) return 0;
+  const acc = new THREE.Vector3();
+  for (let i = 1; i < poly.length - 1; i++) {
+    const e1 = new THREE.Vector3().subVectors(poly[i], poly[0]);
+    const e2 = new THREE.Vector3().subVectors(poly[i + 1], poly[0]);
+    acc.add(e1.cross(e2));
+  }
+  return acc.length() / 2;
+}
+
+// Prizmadaki kafes noktalari (kesirli: a1, a2, c). Orijin kaydirma adaylari.
+function prismLatticePoints() {
+  const ring = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 0], [-1, -1], [0, -1]];
+  const pts = [];
+  for (const z of [0, 1]) for (const [i, j] of ring) pts.push([i, j, z]);
+  return pts;
+}
+
+// HSP duzlemi: normal ters kafesten, n·x = 1 (a1, a2, c kesisimleri 1/h, 1/k, 1/l).
+// Kubikteki gibi negatif indiste duzlem hucre disinda kalirsa orijin, prizmanin
+// bir kafes noktasina kaydirilir: n·x = 1 + n·s (s kafes noktasi).
 export function hexPlanePolygon(structure, h, k, l) {
   const n = planeNormal(structure, h, k, l);
-  let poly = clipPlaneToCell(n, 1, prismHalfspaces());
-  if (poly.length === 0) {
-    // prizma merkezinden gececek sekilde kaydir (gorsel amac)
-    const c = HCP_C_OVER_A;
-    const centroid = new THREE.Vector3(0, 0, c / 2);
-    const d2 = n.dot(centroid);
-    poly = clipPlaneToCell(n, d2, prismHalfspaces());
+  const L = latticeVectors(structure);
+  const hs = prismHalfspaces();
+  let best = null;
+  for (const f of prismLatticePoints()) {
+    const m = 1 + h * f[0] + k * f[1] + l * f[2];
+    const poly = clipPlaneToCell(n, m, hs);
+    if (polyArea(poly) > 1e-4) {
+      const shift = new THREE.Vector3()
+        .addScaledVector(L[0], f[0])
+        .addScaledVector(L[1], f[1])
+        .addScaledVector(L[2], f[2]);
+      best = { poly, normal: n, m, shift, shifted: f.some((x) => x !== 0) };
+      break;
+    }
   }
-  return { poly, normal: n };
+  return best || { poly: [], normal: n, m: 1, shift: new THREE.Vector3(), shifted: false };
 }
 
 // --- Dogrultu vektoru ------------------------------------------------------
@@ -159,16 +188,14 @@ export function cubicDirection(u, v, w) {
   return { start, end, vec };
 }
 
-// HSP 4-indis [uvtw] -> 3-indis [UVW] -> Cartesian
+// HSP 4-indis [uvtw] -> 3-indis [UVW]:  U = u − t, V = v − t, W = w
+// (a3 = −(a1 + a2) oldugundan u·a1 + v·a2 + t·a3 + w·c = U·a1 + V·a2 + W·c)
 export function hcp4to3(u, v, t, w) {
-  // t = -(u+v) olmali; tutarlilik icin yeniden hesaplanir
-  const tt = -(u + v);
-  const U = u - tt;
-  const V = v - tt;
-  const W = w;
-  return { U, V, W };
+  const tt = -(u + v); // t her zaman −(u+v)
+  return { U: u - tt, V: v - tt, W: w };
 }
 
+// Ok, baslangic noktasindan prizmanin disina cikmayacak kadar uzatilir.
 export function hcpDirection(structure, u, v, t, w) {
   const { U, V, W } = hcp4to3(u, v, t, w);
   const a = latticeVectors(structure);
@@ -177,8 +204,12 @@ export function hcpDirection(structure, u, v, t, w) {
     .addScaledVector(a[1], V)
     .addScaledVector(a[2], W);
   const c = HCP_C_OVER_A;
-  const start = new THREE.Vector3(0, 0, vec.z < 0 ? c : 0);
-  const m = vec.length() || 1;
-  const end = start.clone().addScaledVector(vec, 1 / m);
+  const start = new THREE.Vector3(0, 0, vec.z < -EPS ? c : 0);
+  let tMax = Infinity;
+  for (const hs of prismHalfspaces()) {
+    const nv = hs.n.dot(vec);
+    if (nv > EPS) tMax = Math.min(tMax, (hs.d - hs.n.dot(start)) / nv);
+  }
+  const end = start.clone().addScaledVector(vec, tMax);
   return { start, end, vec, U, V, W };
 }
