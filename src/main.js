@@ -11,6 +11,7 @@ import {
 } from './geometry.js';
 import { computeLAY, computeDAY, gcd } from './density.js';
 import { t, getLang, setLang } from './i18n.js';
+import { Vector3 as THREE_V } from 'three';
 
 const CONTACT_EMAIL = 'contact@ilhanyurek.com';
 const IDX_MAX = 9; // indis girisi icin sinir
@@ -52,12 +53,13 @@ const state = {
   current: STRUCTURES.BK,
   mode: 'ball',
   vis: { atoms: true, axes: true, cell: true },
+  hl: true, // duzlem/dogrultu uzerindeki atomlari vurgula
   idx: {
     cubic: { p: [1, 0, 0], d: [1, 1, 0] },
     hexagonal: { p: [1, 0, 0], d: [1, 0, 0] }, // h k l / u v w (i, t turetilir)
   },
-  plane: null, // { hkl, res }
-  dir: null, // { uvw, res }
+  plane: null, // { hkl, members: [{ hkl, res }], family: bool }
+  dir: null, // { uvw, members: [{ uvw, res }], family: bool }
 };
 
 // --- bicimlendirme ---------------------------------------------------------
@@ -92,6 +94,52 @@ const reduce3 = (a) => {
   const g = gcd(gcd(a[0], a[1]), a[2]) || 1;
   return a.map((x) => x / g);
 };
+
+// --- indis aileleri {hkl} / <uvw> -------------------------------------------
+// Kubik (m3̄m): indislerin tum permutasyonlari x tum isaret degisimleri (48).
+// Hekzagonal (6/mmm): (h,k,i) permutasyonlari x (h,k,i) birlikte ± x l ± (24).
+// (hkl) ile (h̄k̄l̄) ayni duzlem takimidir, [uvw] ile [ūv̄w̄] zit yonlu ayni
+// dogrultudur; cizimde her ciftten yalnizca biri gosterilir.
+const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+function familyCubic(v) {
+  const out = [];
+  const seen = new Set();
+  const add = (x) => {
+    const k = x.join(',');
+    const kn = x.map((y) => -y || 0).join(',');
+    if (seen.has(k) || seen.has(kn)) return;
+    seen.add(k);
+    out.push(x);
+  };
+  add(v.map((x) => x || 0));
+  for (const p of PERMS)
+    for (let sg = 0; sg < 8; sg++) {
+      add(p.map((j, i) => (sg & (1 << i) ? -v[j] : v[j]) || 0));
+    }
+  return out;
+}
+// v4 = [h, k, i, l] -> esdegerler (4-indis)
+function familyHex(v4) {
+  const out = [];
+  const seen = new Set();
+  const add = (x) => {
+    const k = x.join(',');
+    const kn = x.map((y) => -y || 0).join(',');
+    if (seen.has(k) || seen.has(kn)) return;
+    seen.add(k);
+    out.push(x);
+  };
+  add(v4.map((x) => x || 0));
+  const hki = v4.slice(0, 3);
+  for (const p of PERMS)
+    for (const s1 of [1, -1])
+      for (const s2 of [1, -1]) add([...p.map((j) => s1 * hki[j] || 0), s2 * v4[3] || 0]);
+  return out;
+}
+// Aile uyelerine verilen renkler (ilki her zaman ana renk)
+const PLANE_COLS = [0xffc107, 0xff7043, 0x26c6da, 0x9ccc65, 0xec407a, 0x7e57c2, 0x29b6f6, 0xd4e157];
+const DIR_COLS = [0xd05ce3, 0x4dd0e1, 0xffb74d, 0x81c784, 0xf06292, 0x9575cd, 0x4fc3f7, 0xdce775];
+const cssCol = (c) => '#' + c.toString(16).padStart(6, '0');
 
 const isHex = () => state.current.system === 'hexagonal';
 const isCompound = () => state.current.category === 'compound';
@@ -156,6 +204,7 @@ function renderPanel() {
         <label><input type="checkbox" data-vis="atoms" ${state.vis.atoms ? 'checked' : ''}> ${t('atoms')}</label>
         <label><input type="checkbox" data-vis="axes" ${state.vis.axes ? 'checked' : ''}> ${t('axes')}</label>
         <label><input type="checkbox" data-vis="cell" ${state.vis.cell ? 'checked' : ''}> ${t('cell')}</label>
+        <label><input type="checkbox" id="tHl" ${state.hl ? 'checked' : ''}> ${t('highlight')}</label>
       </div>
     </section>`;
 
@@ -180,6 +229,7 @@ function renderPanel() {
       <div class="indices${hex ? ' hex' : ''}" data-enter="drawPlane">${planeInputs}</div>
       <div class="btnrow">
         <button id="drawPlane" class="primary">${t('drawPlane')}</button>
+        <button id="famPlane" title="${t('fam_plane_tip')}">${hex ? '{hkil}' : '{hkl}'}</button>
         <button id="clearPlane">${t('clear')}</button>
       </div>
       <div id="planeOut" class="out"></div>
@@ -191,6 +241,7 @@ function renderPanel() {
       <div class="indices${hex ? ' hex' : ''}" data-enter="drawDir">${dirInputs}</div>
       <div class="btnrow">
         <button id="drawDir" class="primary">${t('drawDir')}</button>
+        <button id="famDir" title="${t('fam_dir_tip')}">${hex ? '&lt;uvtw&gt;' : '&lt;uvw&gt;'}</button>
         <button id="clearDir">${t('clear')}</button>
       </div>
       <div id="dirOut" class="out"></div>
@@ -363,17 +414,27 @@ function bindPanel() {
     };
   });
 
+  $('tHl').onchange = (e) => {
+    state.hl = e.target.checked;
+    updateHighlight();
+    if (state.plane) showPlane();
+    if (state.dir) showDir();
+  };
   $('drawPlane').onclick = () => drawPlane();
+  $('famPlane').onclick = () => drawPlane(true);
   $('clearPlane').onclick = () => {
     scene.clearPlane();
     state.plane = null;
+    updateHighlight();
     $('planeOut').innerHTML = '';
     if ($('dayOut')) $('dayOut').innerHTML = '';
   };
   $('drawDir').onclick = () => drawDir();
+  $('famDir').onclick = () => drawDir(true);
   $('clearDir').onclick = () => {
     scene.clearDirection();
     state.dir = null;
+    updateHighlight();
     $('dirOut').innerHTML = '';
     if ($('layOut')) $('layOut').innerHTML = '';
   };
@@ -390,28 +451,88 @@ function applyVisibility() {
   scene.groups.cell.visible = state.vis.cell;
 }
 
+// --- vurgulama --------------------------------------------------------------
+// Hucredeki atom merkezlerinden hangileri cizili duzlem(ler)de ya da
+// dogrultu(lar) uzerinde? Koordinatlar model (Kartezyen, a = 1) uzayinda.
+const ON_EPS = 1e-4;
+function planeTests() {
+  if (!state.plane) return [];
+  return state.plane.members.map(({ hkl, res }) => {
+    const n = planeNormal(state.current, ...hkl);
+    return { n, m: res.m, len: n.length() };
+  });
+}
+function dirTests() {
+  if (!state.dir) return [];
+  return state.dir.members.map(({ res }) => {
+    const v = new THREE_V().subVectors(res.end, res.start);
+    return { s: res.start, v, L2: v.lengthSq() };
+  });
+}
+function onPlane(p, T) {
+  return T.some(({ n, m, len }) => Math.abs(n.dot(p) - m) / len < ON_EPS);
+}
+function onDir(p, T) {
+  return T.some(({ s, v, L2 }) => {
+    const w = new THREE_V().subVectors(p, s);
+    const tt = w.dot(v) / L2;
+    if (tt < -ON_EPS || tt > 1 + ON_EPS) return false;
+    return w.addScaledVector(v, -tt).length() < ON_EPS;
+  });
+}
+function updateHighlight() {
+  if (!state.hl || (!state.plane && !state.dir)) {
+    scene.setHighlight(null);
+    return;
+  }
+  const P = planeTests();
+  const D = dirTests();
+  scene.setHighlight((p) => ({ plane: onPlane(p, P), dir: onDir(p, D) }));
+}
+
 // --- duzlem ----------------------------------------------------------------
-function drawPlane() {
+function drawPlane(family = false) {
   const hkl = readPlane();
   if (hkl.every((x) => x === 0)) {
     $('planeOut').innerHTML = `<i>${t('err_zero')}</i>`;
     return null;
   }
-  const res = isHex() ? hexPlanePolygon(state.current, ...hkl) : cubicPlanePolygon(...hkl);
-  scene.setPlane(res.poly);
-  state.plane = { hkl, res };
+  const hex = isHex();
+  let list;
+  if (!family) list = [hkl];
+  else if (hex) list = familyHex([hkl[0], hkl[1], -(hkl[0] + hkl[1]), hkl[2]]).map((v) => [v[0], v[1], v[3]]);
+  else list = familyCubic(hkl);
+  const members = list.map((x) => ({
+    hkl: x,
+    res: hex ? hexPlanePolygon(state.current, ...x) : cubicPlanePolygon(...x),
+  }));
+  scene.setPlanes(members.map((mb, i) => ({ poly: mb.res.poly, color: PLANE_COLS[i % PLANE_COLS.length] })));
+  state.plane = { hkl, members, family };
+  updateHighlight();
   if ($('dayOut')) $('dayOut').innerHTML = '';
   showPlane();
   return state.plane;
 }
 
+const planeIdx = (x) => (isHex() ? idxHTML([x[0], x[1], -(x[0] + x[1]), x[2]], '(', ')') : idxHTML(x, '(', ')'));
+
 function showPlane() {
-  const { hkl, res } = state.plane;
+  const { hkl, members, family } = state.plane;
+  const res = members[0].res;
   const [h, k, l] = hkl;
   const hex = isHex();
-  const label = hex ? idxHTML([h, k, -(h + k), l], '(', ')') : idxHTML(hkl, '(', ')');
-  let txt = t('drawn_plane', { x: label });
-  if (!res.poly.length) txt += `<br><i>${t('err_plane_out')}</i>`;
+  let txt;
+  if (family) {
+    const fam = hex ? idxHTML([h, k, -(h + k), l], '{', '}') : idxHTML(hkl, '{', '}');
+    txt = t('fam_plane', { x: fam, n: members.length });
+    txt += `<div class="famlist">${members
+      .map((mb, i) => `<span><i style="background:${cssCol(PLANE_COLS[i % PLANE_COLS.length])}"></i>${planeIdx(mb.hkl)}</span>`)
+      .join('')}</div>`;
+    txt += `<i>${t('fam_note_plane')}</i>`;
+  } else {
+    txt = t('drawn_plane', { x: planeIdx(hkl) });
+    if (!res.poly.length) txt += `<br><i>${t('err_plane_out')}</i>`;
+  }
 
   // d = 1/|n| (a birimi); n = h·b1 + k·b2 + l·b3
   const d = 1 / planeNormal(state.current, h, k, l).length();
@@ -419,45 +540,75 @@ function showPlane() {
   const inR = !isCompound() ? ` = ${fmt(d * state.current.aOverR)}·r` : '';
   txt += `<div class="kv"><span>${formula}</span><b>d = ${fmt(d)}·a${inR}</b></div>`;
 
-  const sh = res.shift;
-  if (!hex && (sh.x || sh.y || sh.z)) {
-    txt += `<i>${t('origin_shift', { x: sh.x, y: sh.y, z: sh.z })}</i>`;
-  } else if (hex && res.shifted) {
-    txt += `<i>${t('origin_shift_hex')}</i>`;
+  if (!family) {
+    const sh = res.shift;
+    if (!hex && (sh.x || sh.y || sh.z)) txt += `<i>${t('origin_shift', { x: sh.x, y: sh.y, z: sh.z })}</i>`;
+    else if (hex && res.shifted) txt += `<i>${t('origin_shift_hex')}</i>`;
+  }
+  if (state.hl && scene.highlightCount) {
+    txt += `<div class="hlnote plane">● ${t('hl_plane', { n: scene.highlightCount.plane })}</div>`;
   }
   $('planeOut').innerHTML = txt;
 }
 
 // --- dogrultu --------------------------------------------------------------
-function drawDir() {
+function dirRes(uvw) {
+  const [u, v, w] = uvw;
+  return isHex() ? hcpDirection(state.current, u, v, -(u + v), w) : cubicDirection(u, v, w);
+}
+const dirArr = (x) => (isHex() ? [x[0], x[1], -(x[0] + x[1]), x[2]] : x);
+
+function drawDir(family = false) {
   const uvw = readDir();
   if (uvw.every((x) => x === 0)) {
     $('dirOut').innerHTML = `<i>${t('err_zero')}</i>`;
     return null;
   }
   const hex = isHex();
-  const [u, v, w] = uvw;
-  const res = hex ? hcpDirection(state.current, u, v, -(u + v), w) : cubicDirection(u, v, w);
-  const arr = hex ? [u, v, -(u + v), w] : uvw;
-  scene.setDirection(res.start, res.end, idxParts(arr, '[', ']'));
-  state.dir = { uvw, res };
+  let list;
+  if (!family) list = [uvw];
+  else if (hex) list = familyHex(dirArr(uvw)).map((v) => [v[0], v[1], v[3]]);
+  else list = familyCubic(uvw);
+  const members = list.map((x) => ({ uvw: x, res: dirRes(x) }));
+  scene.setDirections(
+    members.map((mb, i) => ({
+      start: mb.res.start,
+      end: mb.res.end,
+      label: idxParts(dirArr(mb.uvw), '[', ']'),
+      color: DIR_COLS[i % DIR_COLS.length],
+      labelColor: i === 0 ? '#e1a6ee' : cssCol(DIR_COLS[i % DIR_COLS.length]),
+    }))
+  );
+  state.dir = { uvw, members, family };
+  updateHighlight();
   if ($('layOut')) $('layOut').innerHTML = '';
   showDir();
   return state.dir;
 }
 
 function showDir() {
-  const { uvw, res } = state.dir;
-  const [u, v, w] = uvw;
+  const { uvw, members, family } = state.dir;
+  const res = members[0].res;
   const hex = isHex();
-  const arr = hex ? [u, v, -(u + v), w] : uvw;
-  let txt = t('drawn_dir', { x: idxHTML(arr, '[', ']') });
-  if (hex) {
-    const r3 = reduce3([res.U, res.V, res.W]);
-    txt += `<div class="kv"><span>${t('hcp3_rule')}</span><b>${idxHTML(r3, '[', ']')}</b></div>`;
+  let txt;
+  if (family) {
+    txt = t('fam_dir', { x: idxHTML(dirArr(uvw), '&lt;', '&gt;'), n: members.length, n2: members.length * 2 });
+    txt += `<div class="famlist">${members
+      .map((mb, i) => `<span><i style="background:${cssCol(DIR_COLS[i % DIR_COLS.length])}"></i>${idxHTML(dirArr(mb.uvw), '[', ']')}</span>`)
+      .join('')}</div>`;
+    txt += `<i>${t('fam_note_dir')}</i>`;
+  } else {
+    txt = t('drawn_dir', { x: idxHTML(dirArr(uvw), '[', ']') });
+    if (hex) {
+      const r3 = reduce3([res.U, res.V, res.W]);
+      txt += `<div class="kv"><span>${t('hcp3_rule')}</span><b>${idxHTML(r3, '[', ']')}</b></div>`;
+    }
+    const s = res.start;
+    if (!hex && (s.x || s.y || s.z)) txt += `<i>${t('origin_shift', { x: s.x, y: s.y, z: s.z })}</i>`;
   }
-  const s = res.start;
-  if (!hex && (s.x || s.y || s.z)) txt += `<i>${t('origin_shift', { x: s.x, y: s.y, z: s.z })}</i>`;
+  if (state.hl && scene.highlightCount) {
+    txt += `<div class="hlnote dir">● ${t('hl_dir', { n: scene.highlightCount.dir })}</div>`;
+  }
   $('dirOut').innerHTML = txt;
 }
 
@@ -470,13 +621,14 @@ function resultBox(formula, rows, note) {
 }
 
 function onCalcLAY() {
-  const d = drawDir();
+  const d = drawDir(!!(state.dir && state.dir.family));
   if (!d) {
     $('layOut').innerHTML = '';
     return;
   }
   const s = state.current;
-  const uvw = isHex() ? [d.res.U, d.res.V, d.res.W] : d.uvw;
+  const r0 = d.members[0].res;
+  const uvw = isHex() ? [r0.U, r0.V, r0.W] : d.uvw;
   const r = computeLAY(s, uvw);
   if (!r) return ($('layOut').innerHTML = `<i>${t('err_no_line')}</i>`);
   $('layOut').innerHTML = resultBox(
@@ -487,17 +639,17 @@ function onCalcLAY() {
       [t('r_lay'), `${fmt(r.LAY_per_a)} /a`],
       [t('r_lay_r'), `<span class="hl">${fmt(r.LAY_per_R)} /r</span>`],
     ],
-    t('lay_def')
+    d.family ? t('lay_def') + ' ' + t('fam_same_lay') : t('lay_def')
   );
 }
 
 function onCalcDAY() {
-  const p = drawPlane();
+  const p = drawPlane(!!(state.plane && state.plane.family));
   if (!p) {
     $('dayOut').innerHTML = '';
     return;
   }
-  const r = computeDAY(state.current, p.hkl, p.res.m);
+  const r = computeDAY(state.current, p.hkl, p.members[0].res.m);
   if (!r) return ($('dayOut').innerHTML = `<i>${t('err_no_plane_lat')}</i>`);
   const rows = [
     [t('r_n_plane'), r.n],
@@ -505,7 +657,9 @@ function onCalcDAY() {
     [t('r_day'), `${fmt(r.DAY_per_a2)} /a²`],
     [t('r_day_r'), `<span class="hl">${fmt(r.DAY_per_R2)} /r²</span>`],
   ];
-  $('dayOut').innerHTML = resultBox(t('day_formula'), rows, r.n === 0 ? t('day_empty') : t('day_def'));
+  let note = r.n === 0 ? t('day_empty') : t('day_def');
+  if (p.family && r.n) note += ' ' + t('fam_same_day');
+  $('dayOut').innerHTML = resultBox(t('day_formula'), rows, note);
 }
 
 function onCalcAPF() {
@@ -544,6 +698,7 @@ function selectStructure(s) {
   scene.clearDirection();
   state.plane = null;
   state.dir = null;
+  scene.setHighlight(null);
   applyVisibility();
   renderPanel();
 }

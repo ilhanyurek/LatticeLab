@@ -152,3 +152,12 @@ button.calc:active { background: var(--accent); }
 .contact-link { display: inline-block; color: var(--accent); font-size: 15px; text-decoration: none;
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--panel2); }
 button.wide { width: 100%; margin-top: 8px; }
+
+/* Aile listesi ve vurgu notlari */
+.famlist { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 6px 0 2px; }
+.famlist > span { display: inline-flex; align-items: center; gap: 5px; background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; }
+.famlist i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin: 0; }
+.hlnote { margin-top: 6px; font-size: 12.5px; }
+.hlnote.plane { color: #ffca28; }
+.hlnote.dir { color: #e1a6ee; }

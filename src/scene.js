@@ -209,9 +209,11 @@ export class CrystalScene {
       });
       const m = new THREE.Mesh(geo, mat);
       m.position.set(a.pos[0], a.pos[1], a.pos[2]);
+      m.userData.pos = m.position.clone();
       this.groups.atoms.add(m);
     });
     this._buildBonds();
+    this._applyHighlight();
   }
 
   // Top-cubuk gorunumunde en yakin komsular arasina cubuk cizilir.
@@ -286,68 +288,119 @@ export class CrystalScene {
     if (this.structure) this._buildAtoms();
   }
 
-  // --- Duzlem --------------------------------------------------------------
-  setPlane(polygon) {
+  // --- Duzlem(ler) ---------------------------------------------------------
+  // planes: [{ poly, color }] — tek duzlem ya da bir {hkl} ailesi
+  setPlanes(planes) {
     this._clear(this.groups.plane);
-    if (!polygon || polygon.length < 3) return;
-    const centroid = new THREE.Vector3();
-    polygon.forEach((p) => centroid.add(p));
-    centroid.multiplyScalar(1 / polygon.length);
-    const verts = [];
-    for (let i = 0; i < polygon.length; i++) {
-      const a = polygon[i];
-      const b = polygon[(i + 1) % polygon.length];
-      verts.push(centroid.x, centroid.y, centroid.z, a.x, a.y, a.z, b.x, b.y, b.z);
+    const many = planes.length > 1;
+    for (const { poly, color = 0xffc107 } of planes) {
+      if (!poly || poly.length < 3) continue;
+      const centroid = new THREE.Vector3();
+      poly.forEach((p) => centroid.add(p));
+      centroid.multiplyScalar(1 / poly.length);
+      const verts = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i];
+        const b = poly[(i + 1) % poly.length];
+        verts.push(centroid.x, centroid.y, centroid.z, a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: many ? 0.3 : 0.5,
+        roughness: 0.6,
+        depthWrite: false, // atomlar duzlemin arkasinda da gorunsun
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = 2;
+      this.groups.plane.add(mesh);
+      const outline = new THREE.BufferGeometry().setFromPoints([...poly, poly[0]]);
+      const line = new THREE.Line(outline, new THREE.LineBasicMaterial({ color: many ? color : 0xff6f00 }));
+      this.groups.plane.add(line);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xffc107,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.5,
-      roughness: 0.6,
-      depthWrite: false, // atomlar duzlemin arkasinda da gorunsun
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.renderOrder = 2;
-    this.groups.plane.add(mesh);
-    const outline = new THREE.BufferGeometry().setFromPoints([...polygon, polygon[0]]);
-    this.groups.plane.add(
-      new THREE.Line(outline, new THREE.LineBasicMaterial({ color: 0xff6f00, linewidth: 2 }))
-    );
+  }
+
+  setPlane(polygon) {
+    this.setPlanes([{ poly: polygon }]);
   }
 
   clearPlane() {
     this._clear(this.groups.plane);
   }
 
-  // --- Dogrultu ------------------------------------------------------------
-  setDirection(start, end, label) {
+  // --- Dogrultu(lar) -------------------------------------------------------
+  // dirs: [{ start, end, label, color, labelColor }]
+  setDirections(dirs) {
     this._clear(this.groups.direction);
-    const dir = new THREE.Vector3().subVectors(end, start);
-    const arrow = new THREE.ArrowHelper(
-      dir.clone().normalize(),
-      start,
-      dir.length(),
-      0xd05ce3,
-      0.14,
-      0.08
-    );
-    arrow.line.material.depthTest = false;
-    arrow.cone.material.depthTest = false;
-    arrow.renderOrder = 5;
-    this.groups.direction.add(arrow);
-    if (label) {
-      const lab = makeLabel(label, '#e1a6ee');
-      lab.position.copy(end).addScaledVector(dir.clone().normalize(), 0.14);
-      this.groups.direction.add(lab);
+    const many = dirs.length > 1;
+    for (const d of dirs) {
+      const v = new THREE.Vector3().subVectors(d.end, d.start);
+      const len = v.length();
+      if (len < 1e-9) continue;
+      const u = v.clone().normalize();
+      const arrow = new THREE.ArrowHelper(u, d.start, len, d.color ?? 0xd05ce3, many ? 0.11 : 0.14, many ? 0.06 : 0.08);
+      arrow.line.material.depthTest = false;
+      arrow.cone.material.depthTest = false;
+      arrow.renderOrder = 5;
+      this.groups.direction.add(arrow);
+      if (d.label) {
+        const lab = makeLabel(d.label, d.labelColor || '#e1a6ee', many ? 0.14 : 0.2);
+        lab.position.copy(d.end).addScaledVector(u, many ? 0.1 : 0.14);
+        this.groups.direction.add(lab);
+      }
     }
+  }
+
+  setDirection(start, end, label) {
+    this.setDirections([{ start, end, label }]);
   }
 
   clearDirection() {
     this._clear(this.groups.direction);
+  }
+
+  // --- Vurgulama -----------------------------------------------------------
+  // fn(pos: Vector3) -> { plane: bool, dir: bool }; null -> vurgulama yok.
+  // Duzlem uzerindeki atomlar sari, dogrultu uzerindekiler mor parlar;
+  // digerleri soluklasir.
+  setHighlight(fn) {
+    this.highlight = fn;
+    this._applyHighlight();
+  }
+
+  _applyHighlight() {
+    const fn = this.highlight;
+    const meshes = this.groups.atoms.children;
+    const flags = meshes.map((m) => (fn ? fn(m.userData.pos) : { plane: false, dir: false }));
+    const any = flags.some((f) => f.plane || f.dir);
+    meshes.forEach((m, i) => {
+      const f = flags[i];
+      const mat = m.material;
+      const on = f.plane || f.dir;
+      if (m.userData.baseColor === undefined) m.userData.baseColor = mat.color.getHex();
+      const hc = f.plane && f.dir ? 0xffffff : f.plane ? 0xffc107 : f.dir ? 0xd05ce3 : null;
+      mat.color.setHex(hc ?? m.userData.baseColor);
+      mat.emissive.setHex(hc ?? 0x000000);
+      mat.emissiveIntensity = on ? 0.35 : 0;
+      const dim = any && !on;
+      mat.transparent = dim;
+      mat.opacity = dim ? 0.22 : 1;
+      mat.depthWrite = !dim;
+      mat.needsUpdate = true;
+      m.scale.setScalar(on && this.atomMode === 'ball' ? 1.3 : 1);
+    });
+    for (const b of this.groups.bonds.children) {
+      b.material.transparent = any;
+      b.material.opacity = any ? 0.25 : 1;
+    }
+    this.highlightCount = flags.reduce(
+      (acc, f) => ({ plane: acc.plane + (f.plane ? 1 : 0), dir: acc.dir + (f.dir ? 1 : 0) }),
+      { plane: 0, dir: 0 }
+    );
   }
 
   // Kamerayi yapiyi (eksenler dahil) ekrana sigacak uzakliga getirir.

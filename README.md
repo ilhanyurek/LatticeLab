@@ -37,6 +37,10 @@ Uygulamayı tarayıcıda hemen açabilir ya da Windows kurulumunu
 - **Doğrultular [uvw] / [uvtw]:** HSP 4-indis → 3-indis dönüşümü (U = u−t, V = v−t, W = w).
 - Negatif indisler ders kitabındaki gibi **üst çizgiyle** yazılır: (1̄10).
 - Ders kitabı yönelimi: **z (HSP'de c) yukarı**, x izleyiciye doğru, y sağa.
+- **İndis aileleri:** `{hkl}` düğmesi eşdeğer düzlemlerin, `<uvw>` düğmesi eşdeğer
+  doğrultuların tümünü farklı renklerle çizer (kübik ve HSP simetrisi).
+- **Kesişen atomların vurgulanması:** düzlem üzerindeki atom merkezleri sarı,
+  doğrultu üzerindekiler mor parlar, diğerleri soluklaşır; sayıları panelde yazar.
 
 **Hesaplamalar (adım adım: formül, n, uzunluk/alan/hacim, sonuç; a ve r cinsinden):**
 - **LAY** — Lineer Atom Yoğunluğu
@@ -110,7 +114,6 @@ Tarayıcı sürümü ayrı yayınlanır: `main`'e her push'ta
 ## 🗺️ Yol Haritası
 - Hume-Rothery kuralları (katı çözünürlük)
 - Teorik yoğunluk (ρ) hesabı
-- İndis ailesi gösterimi `{hkl}` / `⟨uvw⟩`
 
 ---
 
